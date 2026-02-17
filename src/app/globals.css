@@ -1,8 +1,69 @@
 @import "tailwindcss";
+@plugin "daisyui";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --accent: hsl(18.39, 100%, 60.98%);
+
+  /* Dark mode defaults */
+  --background: hsl(0, 0%, 5%);
+  --foreground: hsl(0, 0%, 10%);
+  --background-2: hsl(0, 0%, 15%);
+  --background-3: hsl(0, 0%, 20%);
+  --text-primary: hsl(0, 0%, 95%);
+  --text-secondary: hsl(0, 0%, 90%);
+  --text-muted: hsl(0, 0%, 60%);
+  --text-on-accent: hsl(0, 0%, 95%);
+  --border-default: hsl(0, 0%, 15%);
+  --selection-text: hsl(0, 0%, 95%);
+  --selection-bg: hsl(18.39, 100%, 60.98%);
+
+  --red-muted: hsl(7, 23, 15);
+  --red-accent: hsl(5, 76, 64);
+  --red-border: hsl(7, 23%, 12%);
+
+  --green-muted: hsl(137, 20, 14);
+  --green-accent: hsl(137, 54, 49);
+  --green-border: hsl(137, 20%, 11%);
+
+  --yellow-muted: hsl(47, 29, 13);
+  --yellow-accent: hsl(55, 70, 38);
+  --yellow-border: hsl(47, 29%, 10%);
+ 
+  --purple-muted: hsl(257, 24, 15);
+  --purple-border: hsl(257, 24%, 12%);
+  --purple-accent: hsl(254, 70, 65);
+
+  --blue-muted: hsl(208, 43, 14);
+  --blue-accent: hsl(206, 70, 51);
+  --blue-border: hsl(208, 43%, 11%);
+  
+  --orange-muted: hsl(28, 33, 14);
+  --orange-accent: hsl(29, 82, 56);
+  --orange-border: hsl(28, 33%, 11%);
+
+  --accent: var(--orange-accent);
+  --accent-foreground: var(--text-on-accent);
+  --ring: var(--orange-accent);
+}
+
+
+
+
+
+
+html[data-theme="light"] {
+  --background: hsl(0, 0%, 98%);
+  --foreground: hsl(0, 0%, 90%);
+  --background-2: hsl(0, 0%, 85%);
+  --background-3: hsl(0, 0%, 80%);
+  --text-primary: hsl(0, 0%, 5%);
+  --text-secondary: hsl(0, 0%, 10%);
+  --text-muted: hsl(0, 0%, 40%);
+  --text-on-accent: hsl(0, 0%, 95%);
+  --border-default: hsl(0, 0%, 85%);
+  --selection-text: hsl(0, 0%, 95%);
+  --selection-bg: hsl(18.39, 90%, 75%);
+  
 }
 
 @theme inline {
@@ -12,15 +73,611 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+.background{
+  background-color: var(--background);
+}
+
+.foreground{
+  background-color: var(--foreground);
+}
+
+.foreforeground{
+  background-color: var(--background-2);
+}
+.foreforeforeground{
+  background-color: var(--background-3);
+}
+
+.accent-bg{
+  background-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.accent-text{
+  
+  color: var(--accent);
+}
+
+.accent-btn{
+  background-color: var(--accent);
+  color: var(--text-on-accent);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-weight: 500;
+
+}
+
+html {
+  background-color: var(--background) !important;
+  
+  ::-moz-selection { /* Code for Firefox */
+    color: var(--selection-text);
+    background: var(--selection-bg);
+  }
+  
+  ::selection {
+    color: var(--selection-text);
+    background:  var(--selection-bg);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+body, #__next, main {
+  transition: color 0.3s ease;
+  background-color: var(--background) !important;
+  font-family: var(--font-satoshi), sans-serif;
+  min-height: 100vh;
+  overflow: visible;
+}
+
+h1, h2, h3, h4, h5, h6{
+  font-family: var(--font-satoshi), sans-serif;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.1em;
+}
+
+h1{
+  font-size: 2.986rem;
+   
+}
+h2{
+  font-size: 2.488rem;
+}
+h3{
+  font-size: 2.074rem;
+}
+h4{
+  font-size: 1.728rem;
+}
+h5{
+  font-size: 1.44rem;
+}
+h6{
+  font-size: 1.2rem;
+}
+
+p{
+  font-size: 1rem;
+  color: var(--text-secondary);
+  line-height: 1.3em;
+}
+
+button:active{
+  scale: 90%;
+}
+
+button{
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  font-size: 1rem;
+  
+}
+
+*:focus {
+  outline: none;
+}
+
+
+button:hover{
+  cursor:pointer;
+  opacity: 90%;
+  
+}
+
+.opacityHover:hover{
+  opacity: 70%;
+}
+
+.buttonDefault{
+  cursor:pointer;
+  opacity: 90%;
+  scale: 110%;
+  background-color: none;
+}
+
+.buttonDefault:hover{
+  cursor:pointer;
+  opacity: 90%;
+  scale: 110%;
+}
+
+.buttonDefault:active{
+  scale: 90%
+}
+
+.borderDefault{
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+
+.borderBottom{
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 15px;
+}
+
+
+
+.deemphesize{
+  color: var(--text-muted) !important;
+}
+
+.bold{
+  font-weight:600;
+}
+
+
+.icon-btn{
+  border-radius: 50px;
+  font-size: 0.5rem;
+}
+
+.whiteBG{
+  background-color: var(--foreground);
+  color: var(--text-primary);
+}
+
+/* Text color utilities that respect theme */
+.text-primary {
+  color: var(--text-primary) !important;
+}
+
+.text-secondary {
+  color: var(--text-secondary) !important;
+}
+
+
+
+/* Allow dropdown to overflow sidebar */
+.sidebar {
+  overflow: visible !important;
+}
+
+.sidebar > div:last-child {
+  overflow: visible !important;
+  position: relative !important;
+}
+
+.sidebar .dropdown {
+  overflow: visible !important;
+  position: relative !important;
+}
+
+.sidebar .dropdown.dropdown-top .dropdown-content {
+  position: absolute !important;
+  left: calc(100% - 2.5rem) !important;
+  bottom: calc(90% ) !important;
+  top: auto !important;
+  min-width: 12rem !important;
+  white-space: nowrap !important;
+  z-index: 1000 !important;
+}
+
+/* Material-UI Modal Satoshi font */
+.MuiModal-root * {
+  font-family: var(--font-satoshi), sans-serif !important;
+}
+
+/* Fix DaisyUI tabs: Hide tab-content that comes after another input */
+.tabs input[type="radio"]:checked ~ input[type="radio"] ~ .tab-content {
+  display: none !important;
+}
+
+.scrollContainer {
+  max-height: 90vh;   
+  overflow-y: auto;    /* scroll only when needed */
+  overflow-x: hidden;
+}
+
+.ghost-btn{
+  background-color: var(--background-3);
+  padding: 8px 10px;
+  border: 1px solid var(--border-default);
+  transition: 300ms ease;
+}
+
+/* Toast border classes */
+.toast-border-red {
+  border: 1px solid var(--red-border) !important;
+}
+
+.toast-border-green {
+  border: 1px solid var(--green-border) !important;
+}
+
+.toast-border-yellow {
+  border: 1px solid var(--yellow-border) !important;
+}
+
+.toast-border-purple {
+  border: 1px solid var(--purple-border) !important;
+}
+
+.toast-border-blue {
+  border: 1px solid var(--blue-border) !important;
+}
+
+.toast-border-orange {
+  border: 1px solid var(--orange-border) !important;
+}
+
+.toast-border-default {
+  border: 1px solid var(--border-default) !important;
+}
+
+
+.hoverGhostButton:hover{
+  background-color: var(--background-2);
+  border: none;
+}
+
+.hoverGhostButton{
+  border: none;
+}
+
+.rdp-button:hover {
+  color: inherit !important;
+}
+
+.calendar-nav-button:hover {
+  background-color: hsl(29, 82%, 56%, 0.2) !important;
+  color: var(--orange-accent) !important;
+}
+
+.calendar-nav-button:hover svg {
+  color: var(--orange-accent) !important;
+}
+
+/* Markdown content styles */
+.markdown-content {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.markdown-content h2{
+  font-size: 2rem;
+}
+
+.markdown-content h1:first-child,
+.markdown-content h2:first-child,
+.markdown-content h3:first-child,
+.markdown-content h4:first-child,
+.markdown-content h5:first-child,
+.markdown-content h6:first-child {
+  margin-top: 0;
+}
+
+.markdown-content p {
+  margin: 1em 0;
+}
+
+.markdown-content p:first-child {
+  margin-top: 0;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 1em 0;
+  padding-left: 1.5em;
+}
+
+.markdown-content li {
+  margin: 0.5em 0;
+}
+
+.markdown-content code {
+  background-color: var(--background-2);
+  color: var(--text-primary);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: var(--font-mono), monospace;
+}
+
+.markdown-content pre {
+  background-color: var(--background-2);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  padding: 0;
+  font-size: 0.9em;
+}
+
+.markdown-content a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-content a:hover {
+  opacity: 0.8;
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 1em;
+  margin: 1em 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--border-default);
+  padding: 0.5em;
+  text-align: left;
+}
+
+.markdown-content th {
+  background-color: var(--background-2);
+  font-weight: 600;
+}
+
+.markdown-content hr {
+  border: none;
+  border-top: 1px solid var(--border-default);
+  margin: 2em 0;
+}
+
+.markdown-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 1em 0;
+}
+
+/* Chat message layout */
+.chat-thread {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0 16px;
+}
+
+.message-row {
+  width: 100%;
+  display: flex;
+}
+
+.message-row-user {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.message-row-assistant {
+  justify-content: flex-start;
+}
+
+.message-bubble-user {
+  max-width: min(84%, 680px);
+  padding: 12px 18px;
+  border-radius: 20px 20px 8px 20px;
+  background-color: var(--background-2);
+  color: var(--text-on-accent);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+.message-bubble-assistant {
+  width: 100%;
+  max-width: 100%;
+  padding: 8px 10px;
+  border-radius: 14px;
+}
+
+.message-bubble-assistant-welcome {
+  background-color: var(--foreground);
+  border: 1px solid var(--border-default);
+  padding: 14px 16px;
+}
+
+.rag-markdown {
+  word-break: break-word;
+}
+
+.rag-markdown p {
+  margin: 0.7em 0;
+}
+
+/* Inline source refs */
+.source-ref {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  margin: 0 0.15rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border-default);
+  background-color: var(--background-2);
+  color: var(--accent);
+  font-size: 0.73rem;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: default;
+}
+
+.source-ref:hover {
+  border-color: var(--accent);
+}
+
+.source-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px);
+  width: min(380px, 72vw);
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  background-color: var(--background-2);
+  color: var(--text-secondary);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.source-ref:hover .source-tooltip,
+.source-ref:focus-within .source-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.source-tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.source-tooltip-title {
+  color: var(--text-primary);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.source-tooltip-score {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.source-tooltip-body {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.77rem;
+  line-height: 1.45;
+  font-style: italic;
+  text-wrap: pretty;
+}
+
+.source-tooltip-meta {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.source-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.source-footer-label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+/* Streaming indicator */
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.typing-label {
+  font-size: 0.8rem;
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--text-muted);
+  animation: chat-dot-pulse 1.2s infinite ease-in-out;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes chat-dot-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
 }
