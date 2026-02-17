@@ -5,6 +5,7 @@ import ChatDrawer, { ChatDrawerToggle } from "@/components/drawer"
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import personalities from '../../../prompts';
+import { CHAT_RAG_API } from '@/lib/chat-api';
 import { createChat, updateChat } from '@/lib/supabase/chats';
 import ChatMessageList from "@/components/chat/chat-message-list";
 
@@ -55,7 +56,7 @@ export default function ChatApp (){
     }
 
     const { messages, sendMessage, data, status } = useChat({
-      api: '/api/chat-rag',
+      api: CHAT_RAG_API,
       onFinish: (message) => {
         if (lastSavedAssistantIdRef.current === message.id) return;
         lastSavedAssistantIdRef.current = message.id;

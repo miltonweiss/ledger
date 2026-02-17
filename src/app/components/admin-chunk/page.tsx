@@ -5,6 +5,7 @@ import { splitText } from '@/lib/langchain/textSplit';
 import { createDocuments } from '@/lib/supabase/documents';
 import { createDocumentsChunks } from '@/lib/supabase/doc_chunks';
 import CHUNKING_PRESETS from '../../../../typeMedia';
+import Header from '@/components/header';
 
 export default function DocumentPipeline() {
 
@@ -44,11 +45,17 @@ export default function DocumentPipeline() {
         name: file.name,
         fileContent: text
       });
+      if (!savedDoc?.id) {
+        throw new Error("Document save failed (no document id returned). Check Supabase insert/RLS policy.");
+      }
 
       // 3️⃣ Split
       setStatus("Splitting text...");
 
       const chunks = await splitText(savedDoc.id, typeMedia);
+      if (!Array.isArray(chunks) || chunks.length === 0) {
+        throw new Error("Split produced no chunks.");
+      }
 
       // 4️⃣ Embed
       setStatus("Generating embeddings...");
@@ -64,20 +71,28 @@ export default function DocumentPipeline() {
         throw new Error(embedBody.error || `Embed failed: ${embedRes.status}`);
       }
       const { embeddings } = embedBody;
+      if (!Array.isArray(embeddings) || embeddings.length !== chunks.length) {
+        throw new Error(
+          `Embedding mismatch: expected ${chunks.length} embeddings, got ${Array.isArray(embeddings) ? embeddings.length : 0}.`
+        );
+      }
 
       // 5️⃣ Save Chunks
       setStatus("Saving chunks...");
 
       for (let i = 0; i < embeddings.length; i++) {
-
-        await createDocumentsChunks({
-          name: savedDoc.id,
+        const savedChunk = await createDocumentsChunks({
+          name: file.name,
           content: chunks[i].pageContent,
           embedding: embeddings[i],
           number: i,
           document_id: savedDoc.id
         });
 
+        if (!savedChunk?.id) {
+          throw new Error(`Failed to save chunk ${i + 1}/${embeddings.length}. Check Supabase table schema or RLS policies.`);
+        }
+        setStatus(`Saving chunks... ${i + 1}/${embeddings.length}`);
       }
 
       setStatus("✅ Done. Document fully processed.");
@@ -91,19 +106,25 @@ export default function DocumentPipeline() {
   }
 
   return (
-    <div className="min-h-screen bg-base-200 p-10">
-      <div className="max-w-2xl mx-auto bg-base-100 shadow-xl rounded-xl p-8 space-y-6">
+    <>
+    <Header
+            demph={"Upload your "}
+            emph={"Documents"}
+      />
+    <div className="h-[95vh] w-[90vw] foreground borderDefault p-10">
+      
+      <div className=" mx-auto   p-8 space-y-6">
 
-        <h1 className="text-2xl font-bold">Document Pipeline</h1>
+        
 
         <input
           type="file"
-          className="file-input file-input-bordered w-full"
+          className="file-input file-input-bordered foreforeground borderDefault w-full"
           onChange={(e) => setFile(e.target.files?.[0] || null)}
         />
 
         <select
-          className="select select-bordered w-full"
+          className="select foreforeground borderDefault select-bordered w-full"
           value={typeMedia}
           onChange={(e) => setTypeMedia(e.target.value)}
         >
@@ -115,7 +136,7 @@ export default function DocumentPipeline() {
         <button
           onClick={handleProcess}
           disabled={loading}
-          className="btn btn-primary w-full"
+          className="btn foreforeground borderDefault w-full"
         >
           {loading ? "Processing..." : "Process Document"}
         </button>
@@ -128,5 +149,6 @@ export default function DocumentPipeline() {
 
       </div>
     </div>
+    </>
   );
 }

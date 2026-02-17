@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useParams, useRouter } from 'next/navigation';
 import personalities from '../../../../prompts';
+import { CHAT_RAG_API } from '@/lib/chat-api';
 import { getSpecificChat, updateChat } from '@/lib/supabase/chats';
 import ChatMessageList from "@/components/chat/chat-message-list";
 
@@ -53,7 +54,7 @@ export default function ChatPage() {
     }
 
     const { messages, sendMessage, setMessages, data, status } = useChat({
-        api: '/api/chat-rag',
+        api: CHAT_RAG_API,
         onFinish: (message) => {
             if (lastSavedAssistantIdRef.current === message.id) return;
             lastSavedAssistantIdRef.current = message.id;

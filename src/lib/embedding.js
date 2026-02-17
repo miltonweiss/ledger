@@ -22,11 +22,7 @@ export async function embedQuery(text) {
 }
 
 /**
- * Find document chunks relevant to the query using our embed API logic + Supabase.
- * Uses the same embedding model as /api/embed (text-embedding-3-small).
- * If your Supabase has an RPC like match_document_chunks(query_embedding, match_count),
- * you can use it here for better performance; otherwise we fetch chunks and rank by similarity in JS.
- *
+
  * @param {string} queryText
  * @param {import('@supabase/supabase-js').SupabaseClient} supabaseClient
  * @param {{ topK?: number }} [options]
@@ -42,36 +38,80 @@ export async function findRelevantContent(queryText, supabaseClient, options = {
 
   // Try Supabase RPC first if available (pgvector).
   const rpcMatches = await findRelevantContentWithRpc(supabaseClient, queryEmbedding, topK)
-  if (rpcMatches.length) return rpcMatches
+  if (rpcMatches.length) {
+    const topRpcSimilarity = Math.max(
+      ...rpcMatches.map((row) => Number(row?.similarity ?? 0))
+    )
+
+    if (topRpcSimilarity > 0) {
+      console.log('[RAG] findRelevantContent: RPC returned', rpcMatches.length, 'matches')
+      return rpcMatches
+    }
+
+    // Some RPCs return distance-like values that do not map cleanly to [0..1].
+    // If normalized scores look unusable, fallback to local cosine ranking.
+    console.warn('[RAG] findRelevantContent: RPC returned rows but similarity is not usable, falling back', {
+      count: rpcMatches.length,
+      topRpcSimilarity,
+    })
+  }
+  console.log('[RAG] findRelevantContent: no RPC results, using fallback (document_chunks table)')
 
   // Fallback: fetch chunks with embeddings and rank by cosine similarity
-  const { data: chunks, error } = await supabaseClient
+  // Schema: id, content, embedding, chunks_number, name, date_Added
+  let chunks = null
+  let error = null
+
+  ;({ data: chunks, error } = await supabaseClient
     .from('document_chunks')
-    .select('id, document_id, chunks_number, content, text, name, title, embedding')
+    .select('id, content, embedding, chunks_number, name, date_Added')
     .not('embedding', 'is', null)
-    .limit(fetchLimit)
+    .limit(fetchLimit))
 
-  if (error || !chunks?.length) return []
+  if (error) {
+    console.error('[RAG] findRelevantContent: Supabase fallback error', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+    })
+    return []
+  }
+  if (!chunks?.length) {
+    console.warn('[RAG] findRelevantContent: no rows in document_chunks with non-null embedding (table empty or embeddings not populated)')
+    return []
+  }
 
+  let invalidEmbeddingCount = 0
   const scored = chunks
     .map((row) => {
       const emb = parseEmbeddingVector(row.embedding)
-      if (!emb.length || emb.length !== queryEmbedding.length) return null
+      if (!emb.length || emb.length !== queryEmbedding.length) {
+        invalidEmbeddingCount += 1
+        return null
+      }
       const similarity = cosineSimilarity(queryEmbedding, emb)
       return {
         id: String(row.id ?? ''),
-        text: row.content ?? row.text ?? '',
+        text: row.content ?? '',
         similarity,
         metadata: {
-          title: row.title ?? row.name ?? undefined,
-          documentId: row.document_id ?? undefined,
+          title: row.name ?? undefined,
+          name: row.name ?? undefined,
           chunkNumber: row.chunks_number ?? undefined,
+          dateAdded: row.date_Added ?? undefined,
         },
       }
     })
     .filter(Boolean)
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, topK)
+
+  if (invalidEmbeddingCount > 0) {
+    console.warn('[RAG] findRelevantContent: skipped rows with invalid embedding shape', {
+      invalidEmbeddingCount,
+      queryEmbeddingLength: queryEmbedding.length,
+    })
+  }
 
   return scored
 }
@@ -138,8 +178,9 @@ function normalizeSimilarityScore(row) {
 
   const distance = Number(row?.distance)
   if (Number.isFinite(distance)) {
-    // pgvector distance is lower-is-better; convert to higher-is-better signal.
-    return Math.max(0, 1 - distance)
+    // Convert lower-is-better distance into a bounded higher-is-better score.
+    // This works for distance metrics whose ranges are not naturally [0..1].
+    return 1 / (1 + Math.max(0, distance))
   }
 
   return 0
@@ -147,12 +188,23 @@ function normalizeSimilarityScore(row) {
 
 function parseEmbeddingVector(rawEmbedding) {
   if (Array.isArray(rawEmbedding)) return rawEmbedding
+  if (ArrayBuffer.isView(rawEmbedding)) return Array.from(rawEmbedding)
   if (typeof rawEmbedding !== 'string') return []
 
+  const trimmed = rawEmbedding.trim()
+
   try {
-    const parsed = JSON.parse(rawEmbedding)
+    const parsed = JSON.parse(trimmed)
     return Array.isArray(parsed) ? parsed : []
   } catch (_) {
+    // Handle Postgres array-like fallback, e.g. "{0.1,0.2,...}".
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      return trimmed
+        .slice(1, -1)
+        .split(',')
+        .map((value) => Number(value.trim()))
+        .filter((value) => Number.isFinite(value))
+    }
     return []
   }
 }

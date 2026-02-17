@@ -21,7 +21,7 @@ export const revalidate = 0
  * RAG tuning
  */
 const RAG_TOP_K = 5
-const RAG_MIN_SIMILARITY = 0.15
+const RAG_MIN_SIMILARITY = 0.3
 const RAG_MAX_CONTEXT_CHARS = 10_000
 
 const supabase = createClient(
@@ -83,7 +83,7 @@ async function retrieveContext(userText: string): Promise<{
   let results: any[]
   try {
       results = await findRelevantContent(userText, supabase, { topK: RAG_TOP_K })
-    console.log('[RAG] retrieveContext: findRelevantCo ntent returned', {
+    console.log('[RAG] retrieveContext: findRelevantContent returned', {
       count: results?.length ?? 0,
       rawSample: results?.[0] ? { keys: Object.keys(results[0]), similarity: results[0].similarity ?? results[0].score } : null,
     })
@@ -107,6 +107,13 @@ async function retrieveContext(userText: string): Promise<{
     .filter((c) => c.score >= RAG_MIN_SIMILARITY && c.text.trim().length > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, RAG_TOP_K)
+
+  if (!chunks.length && beforeFilter.length) {
+    console.warn('[RAG] retrieveContext: no chunks passed RAG_MIN_SIMILARITY; returning no context', {
+      RAG_MIN_SIMILARITY,
+      topScores: beforeFilter.slice(0, 5).map((c) => c.score.toFixed(3)),
+    })
+  }
 
   console.log('[RAG] retrieveContext: after filter/sort/slice', {
     RAG_MIN_SIMILARITY,

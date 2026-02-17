@@ -89,6 +89,7 @@ export default function Textsplit() {
                     content: chunk.pageContent,
                     embedding: embedding,
                     number: i,
+                    document_id: id || null,
                 });
 
                 if (!saved) {

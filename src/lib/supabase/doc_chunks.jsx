@@ -32,17 +32,33 @@ export async function getSpecificDocumentChunk (id){
 
 export async function createDocumentsChunks(chunk){
   try {
-    const resolvedName = chunk.document_id ?? chunk.name ?? '';
+    const payload = {
+      name: chunk.name ?? '',
+      content: chunk.content ?? '',
+      embedding: chunk.embedding ?? [],
+      chunks_number: chunk.number ?? 0,
+    }
 
-    const { data, error } = await supabase
+    if (chunk.document_id != null) {
+      payload.document_id = chunk.document_id
+    }
+
+    let data = null
+    let error = null
+
+    ;({ data, error } = await supabase
       .from('document_chunks')
-      .insert([{
-        name: resolvedName,
-        content: chunk.content ?? '',
-        embedding: chunk.embedding ?? [],
-        chunks_number: chunk.number ?? 0,
-      }])
-      .select()
+      .insert([payload])
+      .select())
+
+    if (error?.code === '42703' && Object.prototype.hasOwnProperty.call(payload, 'document_id')) {
+      console.warn('document_chunks has no document_id column, retrying insert without document_id')
+      const { document_id, ...fallbackPayload } = payload
+      ;({ data, error } = await supabase
+        .from('document_chunks')
+        .insert([fallbackPayload])
+        .select())
+    }
 
     if (error) {
       console.error('Error creating Documents:', error);
