@@ -26,6 +26,10 @@ export default function Components (){
             "name" : "admin-chunk",
             "function": "Add and see documents"
         },
+        {
+            "name" : "Markdown-chunk",
+            "function": "Turn Markdown files into chunks"
+        },
         
        
        
