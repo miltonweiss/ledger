@@ -14,7 +14,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@floating-ui/react": "^0.27.17",
-    "@langchain/core": "^1.1.19",
+    "@langchain/core": "^1.1.29",
     "@langchain/openai": "^1.2.5",
     "@langchain/textsplitters": "^1.0.1",
     "@mui/material": "^7.3.7",

@@ -3,24 +3,41 @@ import { embedMany } from 'ai';
 
 export async function POST(req) {
   try {
-    const { values } = await req.json();
-    
+    const body = await req.json();
+    const model = openai.embedding('text-embedding-3-small');
+
+    if (typeof body?.text === 'string') {
+      const text = body.text.trim();
+      if (!text) {
+        return Response.json(
+          { error: 'Invalid input: text must be a non-empty string' },
+          { status: 400 }
+        );
+      }
+
+      const { embeddings } = await embedMany({
+        model,
+        values: [text],
+      });
+
+      return Response.json({ embedding: embeddings?.[0] ?? [] });
+    }
+
+    const { values } = body ?? {};
     if (!values || !Array.isArray(values)) {
       return Response.json(
-        { error: 'Invalid input: values must be an array' },
+        { error: 'Invalid input: provide text(string) or values(array)' },
         { status: 400 }
       );
     }
 
     // Extract pageContent from each chunk if needed
-    const pageContents = values.map(chunk => 
-      typeof chunk === 'string' ? chunk : chunk.pageContent
+    const pageContents = values.map((chunk) =>
+      typeof chunk === 'string' ? chunk : chunk?.pageContent
     );
 
-    // Use direct OpenAI API with provider instance
-    // The openai() function automatically uses OPENAI_API_KEY from environment
     const { embeddings } = await embedMany({
-      model: openai.embedding('text-embedding-3-small'),
+      model,
       values: pageContents,
     });
 

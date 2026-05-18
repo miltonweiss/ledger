@@ -15,10 +15,15 @@ export async function POST(req: Request) {
     const type = (file.type || "").toLowerCase();
     const isPdf = name.endsWith(".pdf") || type === "application/pdf";
     const isTxt = name.endsWith(".txt") || type === "text/plain";
+    const isMarkdown =
+      name.endsWith(".md") ||
+      name.endsWith(".markdown") ||
+      type === "text/markdown" ||
+      type === "text/x-markdown";
 
-    if (!isPdf && !isTxt) {
+    if (!isPdf && !isTxt && !isMarkdown) {
       return NextResponse.json(
-        { error: "Unsupported file type. Only TXT and PDF allowed." },
+        { error: "Unsupported file type. Only TXT, Markdown, and PDF allowed." },
         { status: 400 }
       );
     }
@@ -27,7 +32,7 @@ export async function POST(req: Request) {
 
     let text = "";
 
-    if (isTxt) {
+    if (isTxt || isMarkdown) {
       text = buffer.toString("utf-8");
     }
 

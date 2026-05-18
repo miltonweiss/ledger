@@ -25,7 +25,7 @@ export default function NavBar() {
     { href: "/", name: "Dashboard", icon: "dashboard" },
     { href: "/todo", name: "To Do's", icon: "todo" },
     { href: "/chat", name: "AI-Chat", icon: "chatbubble" },
-    { href: "/components", name: "Components", icon: "bookmark" },
+    { href: "/notes", name: "Notes", icon: "notes" },
   ];
 
   return (

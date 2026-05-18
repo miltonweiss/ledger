@@ -14,9 +14,14 @@ export default function FileUploader(props) {
     const fileType = (nextFile.type || "").toLowerCase();
     const isTxt = fileName.endsWith(".txt") || fileType === "text/plain";
     const isPdf = fileName.endsWith(".pdf") || fileType === "application/pdf";
+    const isMarkdown =
+      fileName.endsWith(".md") ||
+      fileName.endsWith(".markdown") ||
+      fileType === "text/markdown" ||
+      fileType === "text/x-markdown";
 
-    if (!isTxt && !isPdf) {
-      props.setUploadError("Unsupported file type. Please upload a .txt or .pdf file.");
+    if (!isTxt && !isPdf && !isMarkdown) {
+      props.setUploadError("Unsupported file type. Please upload .txt, .md, .markdown, or .pdf.");
       props.setIsExtracting(false);
       return;
     }
@@ -48,11 +53,11 @@ export default function FileUploader(props) {
   return (
     <div className="space-y-4">
       <label className="block">
-        <span className="mb-2 block text-sm text-secondary">Upload TXT or PDF</span>
+        <span className="mb-2 block text-sm text-secondary">Upload TXT, Markdown, or PDF</span>
         <input
           type="file"
           onChange={handleFileChange}
-          accept=".txt,.pdf,text/plain,application/pdf"
+          accept=".txt,.md,.markdown,.pdf,text/plain,text/markdown,text/x-markdown,application/pdf"
           className="file-input file-input-bordered w-full foreground text-primary borderDefault"
         />
       </label>
