@@ -21,6 +21,21 @@ export async function embedQuery(text) {
   return embeddings?.[0] ?? []
 }
 
+export async function embedTexts(texts) {
+  const values = (texts || [])
+    .filter((text) => typeof text === 'string' && text.trim())
+    .map((text) => text.trim())
+
+  if (!values.length) return []
+
+  const { embeddings } = await embedMany({
+    model: EMBEDDING_MODEL,
+    values,
+  })
+
+  return embeddings || []
+}
+
 /**
 
  * @param {string} queryText

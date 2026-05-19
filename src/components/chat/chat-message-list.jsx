@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useCallback } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import FocusProposalCard from "@/components/focus-os/FocusProposalCard";
 
 // --- Types (even without TypeScript, this documents the contract) ---
 // Chunk: { source: number, score: number | null, title: string | null, preview: string }
@@ -67,6 +68,18 @@ function chunksFromMessage(message) {
   }
 
   return chunks;
+}
+
+function proposalsFromMessage(message) {
+  if (!Array.isArray(message?.parts)) return [];
+
+  return message.parts
+    .map((part) => {
+      if (part?.type === "focus_proposal") return part.data || part;
+      if (part?.type === "data-focus_proposal") return part.data;
+      return null;
+    })
+    .filter(Boolean);
 }
 
 // ─── Citation transformation ────────────────────────────────────────
@@ -180,13 +193,8 @@ function AssistantMessage({ content, chunks }) {
 
 function TypingIndicator() {
   return (
-    <div className="typing-indicator" aria-live="polite">
-      <span className="typing-label">Thinking</span>
-      <span className="typing-dots">
-        <span />
-        <span />
-        <span />
-      </span>
+    <div className="typing-skeleton" aria-live="polite">
+      <div className="typing-skeleton-line" />
     </div>
   );
 }
@@ -196,6 +204,8 @@ function TypingIndicator() {
 export default function ChatMessageList({
   messages = [],
   isLoading = false,
+  fallbackAssistantChunks = [],
+  fallbackFocusProposals = [],
 }) {
   const endRef = useRef(null);
   const autoScrollRef = useRef(true);
@@ -210,6 +220,11 @@ export default function ChatMessageList({
     const last = visible[visible.length - 1];
     return !last || last.role !== "assistant" || !textFromMessage(last).trim();
   }, [visible, isLoading]);
+
+  const hasMessageProposal = useMemo(
+    () => visible.some((message) => proposalsFromMessage(message).length > 0),
+    [visible],
+  );
 
   // Scroll tracking
   useEffect(() => {
@@ -244,7 +259,17 @@ export default function ChatMessageList({
       {visible.map((message, index) => {
         const isUser = message.role === "user";
         const text = textFromMessage(message);
-        const chunks = isUser ? [] : chunksFromMessage(message);
+        
+        // Use chunks from message if available, otherwise use fallback if it's the last assistant message and we're loading
+        let chunks = isUser ? [] : chunksFromMessage(message);
+        if (!isUser && chunks.length === 0 && index === visible.length - 1 && isLoading) {
+          chunks = fallbackAssistantChunks;
+        }
+        let proposals = isUser ? [] : proposalsFromMessage(message);
+        if (!isUser && proposals.length === 0 && index === visible.length - 1) {
+          proposals = fallbackFocusProposals;
+        }
+
         const isWelcome = !isUser && (message.id === "init" || index === 0);
 
         return (
@@ -259,11 +284,24 @@ export default function ChatMessageList({
                 className={`message-bubble-assistant${isWelcome ? " message-bubble-assistant-welcome" : ""}`}
               >
                 <AssistantMessage content={text} chunks={chunks} />
+                {proposals.map((proposal, proposalIndex) => (
+                  <FocusProposalCard key={`${proposal.kind || "proposal"}-${proposalIndex}`} proposal={proposal} />
+                ))}
               </div>
             )}
           </div>
         );
       })}
+
+      {!hasMessageProposal && fallbackFocusProposals.length > 0 && (
+        <div className="message-row message-row-assistant">
+          <div className="message-bubble-assistant">
+            {fallbackFocusProposals.map((proposal, proposalIndex) => (
+              <FocusProposalCard key={`${proposal.kind || "proposal"}-${proposalIndex}`} proposal={proposal} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {showTyping && (
         <div className="message-row message-row-assistant">

@@ -33,12 +33,19 @@ export function Checkbox (props){
     }
 
     return(
+      <label className="custom-checkbox-wrapper cursor-pointer flex items-center justify-center">
         <input
-        type="checkbox"
-        checked={props.check || false}
-        onChange={handleChange}
-        className="checkbox   foreforeground   "
-      />
+          type="checkbox"
+          checked={props.check || false}
+          onChange={handleChange}
+          className="peer sr-only"
+        />
+        <div className={`custom-checkbox ${props.check ? "checked" : ""}`}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6L9 17l-5-5" className="check-path"></path>
+          </svg>
+        </div>
+      </label>
     )
 }
 

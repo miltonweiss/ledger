@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:focus": "node --test --experimental-default-type=module src/lib/focus-os/*.test.js"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.25",

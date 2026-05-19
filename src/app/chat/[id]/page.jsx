@@ -80,6 +80,17 @@ export default function ChatPage() {
         const chunks = latestRagContext?.chunks || latestRagContext?.data?.chunks;
         return Array.isArray(chunks) ? chunks : [];
     }, [data]);
+    const streamFocusProposals = useMemo(() => {
+        if (!Array.isArray(data)) return [];
+        return data
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') return null;
+                if (entry.type === 'focus_proposal' || entry.type === 'data-focus_proposal') return entry.data || entry;
+                if (entry.type === 'data' && entry.data?.type === 'focus_proposal') return entry.data?.data;
+                return null;
+            })
+            .filter(Boolean);
+    }, [data]);
 
     // Load the existing chat on mount
     useEffect(() => {
@@ -158,6 +169,7 @@ export default function ChatPage() {
                     <ChatMessageList
                         messages={messages}
                         fallbackAssistantChunks={streamRagChunks}
+                        fallbackFocusProposals={streamFocusProposals}
                         isLoading={isLoading}
                     />
                 </div>
@@ -192,11 +204,11 @@ export default function ChatPage() {
                     </div>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 flex-row">
-                            <button type="button" className=" p-2 foreforeforeground flex btn opacityHover"><ExtraPlus /></button>
+                            <button type="button" className=" p-2 foreforeground flex btn opacityHover"><ExtraPlus /></button>
                             <select
                                 value={personality}
                                 onChange={(e) => setPersonality(Number(e.target.value))}
-                                className="select foreforeforeground border-none py-1"
+                                className="select foreforeground border-none py-1"
                             >
                                 {personalities.map((person) => {
                                     return (
@@ -206,7 +218,7 @@ export default function ChatPage() {
                             </select>
                         </div>
                         <div>
-                            <button type="submit" disabled={isInputEmpty || isLoading} className=" p-2 btn foreforeforeground opacityHover"><Send /></button>
+                            <button type="submit" disabled={isInputEmpty || isLoading} className=" p-2 btn foreforeground opacityHover"><Send /></button>
                         </div>
                     </div>
                 </form>

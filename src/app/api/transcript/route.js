@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { YoutubeTranscript } from '@danielxceron/youtube-transcript';
+import { YoutubeTranscript } from 'youtube-transcript';
 
 export async function GET(request) {
   const url = request.url

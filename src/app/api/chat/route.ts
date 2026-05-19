@@ -12,6 +12,9 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { findRelevantContent } from '@/lib/embedding'
 import personalities from '../../../../prompts'
+import { calculateDayStatus, canStopToday, getDefaultDayType, toLocalDateString } from '@/lib/focus-os/day.js'
+import { buildTaskCleanerProposal, buildTodayRecommendation } from '@/lib/focus-os/recommendation.js'
+import { calculateWeeklyScore, getWeekRange } from '@/lib/focus-os/score.js'
 
 export const maxDuration = 30
 export const dynamic = 'force-dynamic'
@@ -23,6 +26,7 @@ export const revalidate = 0
 const RAG_TOP_K = 5
 const RAG_MIN_SIMILARITY = 0.3
 const RAG_MAX_CONTEXT_CHARS = 10_000
+const FOCUS_CONTEXT_MAX_TASKS = 12
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -158,6 +162,168 @@ async function retrieveContext(userText: string): Promise<{
   return { context, chunks }
 }
 
+async function getOrCreateFocusLog(date: string) {
+  const { data: existing, error: fetchError } = await supabase
+    .from('daily_logs')
+    .select('*')
+    .eq('date', date)
+    .maybeSingle()
+
+  if (fetchError) {
+    console.error('[Focus OS] daily log fetch failed', fetchError)
+    return null
+  }
+
+  if (existing) return existing
+
+  const dayType = getDefaultDayType(new Date(`${date}T12:00:00`))
+  const status = calculateDayStatus({ dayType } as any)
+  const { data, error } = await supabase
+    .from('daily_logs')
+    .insert([{ date, day_type: dayType, status }])
+    .select('*')
+    .single()
+
+  if (error) {
+    console.error('[Focus OS] daily log create failed', error)
+    return null
+  }
+
+  return data
+}
+
+async function retrieveFocusContext(userText: string) {
+  const date = toLocalDateString()
+  const dailyLog = await getOrCreateFocusLog(date)
+  if (!dailyLog) return null
+
+  const { start, end } = getWeekRange(new Date())
+  const startDate = toLocalDateString(start)
+  const endDate = toLocalDateString(end)
+
+  const [tasksResult, todaySessionsResult, shutdownResult, weekSessionsResult, weekLogsResult] = await Promise.all([
+    supabase.from('tasks').select('*').is('killed_at', null).order('created_at', { ascending: false }),
+    supabase.from('focus_sessions').select('*, tasks(*)').eq('daily_log_id', dailyLog.id),
+    supabase.from('shutdowns').select('*').eq('daily_log_id', dailyLog.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('focus_sessions').select('*, tasks(*)').gte('started_at', start.toISOString()).lte('started_at', end.toISOString()),
+    supabase.from('daily_logs').select('*').gte('date', startDate).lte('date', endDate),
+  ])
+
+  if (tasksResult.error) console.error('[Focus OS] tasks fetch failed', tasksResult.error)
+  if (todaySessionsResult.error) console.error('[Focus OS] today sessions fetch failed', todaySessionsResult.error)
+  if (shutdownResult.error) console.error('[Focus OS] shutdown fetch failed', shutdownResult.error)
+  if (weekSessionsResult.error) console.error('[Focus OS] week sessions fetch failed', weekSessionsResult.error)
+  if (weekLogsResult.error) console.error('[Focus OS] week logs fetch failed', weekLogsResult.error)
+
+  const tasks = tasksResult.data || []
+  const todaySessions = normalizeSessions(todaySessionsResult.data || [])
+  const weekSessions = normalizeSessions(weekSessionsResult.data || [])
+  const mainTask = tasks.find((task: any) => task.id === dailyLog.main_block_task_id) || null
+  const sideTask = tasks.find((task: any) => task.id === dailyLog.side_block_task_id) || null
+  const status = calculateDayStatus({
+    dayType: dailyLog.day_type,
+    energy: dailyLog.energy_am,
+    guilt: dailyLog.guilt_am,
+    mainBlockDone: dailyLog.main_block_done || mainTask?.done,
+    shutdownDone: dailyLog.shutdown_done,
+    override: dailyLog.status_override,
+  } as any)
+  const recommendation = buildTodayRecommendation(tasks, { today: date, dayType: dailyLog.day_type, status })
+  const weeklyScore = calculateWeeklyScore({ sessions: weekSessions, dailyLogs: weekLogsResult.data || [], today: new Date() })
+  const stopPermission = canStopToday({
+    dailyLog: { ...dailyLog, status },
+    shutdown: shutdownResult.data,
+    mainTask,
+    dayType: dailyLog.day_type,
+    focusSessions: todaySessions,
+  })
+
+  return {
+    date,
+    dailyLog: { ...dailyLog, status },
+    tasks,
+    mainTask,
+    sideTask,
+    recommendation,
+    weeklyScore,
+    stopPermission,
+    shutdown: shutdownResult.data,
+    userText,
+  }
+}
+
+function buildFocusSystemContext(focus: any): string {
+  if (!focus) return ''
+
+  const taskLines = focus.tasks
+    .filter((task: any) => !task.done && !task.killed_at)
+    .slice(0, FOCUS_CONTEXT_MAX_TASKS)
+    .map((task: any) => {
+      return `- ${task.name} (id: ${task.id}, area: ${task.area || 'unset'}, work_type: ${task.work_type || 'unset'}, block_type: ${task.block_type || 'unset'}, energy: ${task.energy_required || 'unset'}, due: ${task.due || 'none'}, done: ${task.done ? 'yes' : 'no'}, definition_of_done: ${task.definition_of_done || 'missing'})`
+    })
+    .join('\n')
+
+  return `Focus OS context for today:
+Date: ${focus.date}
+Day type: ${focus.dailyLog.day_type}
+Status: ${focus.dailyLog.status}
+Main block: ${focus.mainTask?.name || focus.recommendation?.mainBlock?.name || 'none'}
+Side block: ${focus.sideTask?.name || focus.recommendation?.sideBlock?.name || 'none'}
+Shutdown done: ${focus.dailyLog.shutdown_done ? 'yes' : 'no'}
+Stop permission: ${focus.stopPermission.allowed ? 'allowed' : 'not yet'} — ${focus.stopPermission.message}
+Weekly: WSO ${focus.weeklyScore.wsoHours}/${focus.weeklyScore.wsoTarget}h, Cash ${focus.weeklyScore.cashSessions}/${focus.weeklyScore.cashTarget}, Freelance ${focus.weeklyScore.freelanceHours}/max ${focus.weeklyScore.freelanceMax}h, Gym ${focus.weeklyScore.gymSessions}/${focus.weeklyScore.gymTarget}, Status ${focus.weeklyScore.status}
+Fake work signal: ${focus.weeklyScore.fakeWork.active ? focus.weeklyScore.fakeWork.message : 'none'}
+
+Open tasks:
+${taskLines || '- No open tasks'}
+
+Answer Focus OS questions in English, concretely, and keep the day smaller than the user's guilt wants. You may propose task/day changes, but you must not claim they are applied until the user applies the proposal.`
+}
+
+function buildFocusProposal(userText: string, focus: any) {
+  if (!focus) return null
+  const lower = userText.toLowerCase()
+  const wantsShrink = /shrink today|shrink|mach meinen plan kleiner|clean/.test(lower)
+  const wantsClarify = /clarify task|clarify|unclear/.test(lower)
+  const wantsFakeProd = /find fake productivity|fake work|fake productivity/.test(lower)
+  const wantsShutdownCoach = /shutdown coach|reflect|shutdown/.test(lower)
+
+  if (wantsShrink) {
+    const proposal = buildTaskCleanerProposal(focus.tasks, {
+      today: focus.date,
+      dayType: focus.dailyLog.day_type,
+      capacityMode: focus.dailyLog.capacity_mode,
+    })
+    return {
+      ...proposal,
+      kind: 'shrink_today',
+      title: 'Shrink Today',
+      summary: 'Keep the useful work, cut the noise, and move anything that does not fit today.',
+      daily_log_id: focus.dailyLog.id,
+      date: focus.date,
+      keep_tasks: focus.tasks.filter((task: any) => proposal.keep_task_ids?.includes(task.id)).map(minTask),
+      cut_tasks: focus.tasks.filter((task: any) => proposal.cut_task_ids?.includes(task.id)).map(minTask),
+      kill_tasks: focus.tasks.filter((task: any) => proposal.kill_task_ids?.includes(task.id)).map(minTask),
+      move_task_names: focus.tasks.filter((task: any) => proposal.move_tasks?.some((move: any) => move.id === task.id)).map(minTask),
+    }
+  }
+
+  // Notice: The other 3 commands (Clarify, Fake Productivity, Shutdown Coach) 
+  // do not currently generate a strict FocusProposal structure yet, 
+  // but they could be answered textually by the AI since they are standard questions.
+  // We can return a proposal object for them later if we build a UI for them.
+
+  return null
+}
+
+function normalizeSessions(sessions: any[]) {
+  return sessions.map((session) => ({ ...session, task: session.task || session.tasks || null }))
+}
+
+function minTask(task: any) {
+  return { id: task.id, name: task.name }
+}
+
 // ─── POST handler ─────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -201,8 +367,8 @@ export async function POST(request: NextRequest) {
 
     // 3. Retrieve (always — let similarity threshold filter)
     console.log('[RAG] POST: step 3 – retrieve RAG context')
-    const { context: ragContext, chunks: ragChunks } =
-      await retrieveContext(userText)
+    const [{ context: ragContext, chunks: ragChunks }, focusContext] =
+      await Promise.all([retrieveContext(userText), retrieveFocusContext(userText)])
     console.log('[RAG] POST: RAG result', {
       ragContextLength: ragContext.length,
       ragChunksCount: ragChunks.length,
@@ -224,6 +390,11 @@ export async function POST(request: NextRequest) {
       finalMessages.push({ role: 'system', content: ragContext })
     }
 
+    const focusSystemContext = buildFocusSystemContext(focusContext)
+    if (focusSystemContext) {
+      finalMessages.push({ role: 'system', content: focusSystemContext })
+    }
+
     finalMessages.push(...latestUserMessages)
 
     console.log('[RAG] POST: step 4 – finalMessages', {
@@ -233,6 +404,7 @@ export async function POST(request: NextRequest) {
 
     // 5. Stream (AI SDK 6: createUIMessageStream + createUIMessageStreamResponse)
     console.log('[RAG] POST: step 5 – starting stream')
+    const focusProposal = buildFocusProposal(userText, focusContext)
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         console.log('[RAG] POST: execute – writing rag_context to stream', { chunksCount: ragChunks.length })
@@ -249,6 +421,14 @@ export async function POST(request: NextRequest) {
             })),
           },
         })
+
+        if (focusProposal) {
+          writer.write({
+            type: 'data-focus_proposal',
+            id: generateId(),
+            data: focusProposal,
+          })
+        }
 
         console.log('[RAG] POST: execute – calling streamText (gpt-4.1)')
         const result = streamText({

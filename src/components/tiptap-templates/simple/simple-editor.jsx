@@ -157,7 +157,7 @@ const MobileToolbarContent = ({
   </>
 )
 
-export function SimpleEditor() {
+export function SimpleEditor({ initialContent, onUpdate }) {
   const isMobile = useIsBreakpoint()
   const { height } = useWindowSize()
   const [mobileView, setMobileView] = useState("main")
@@ -165,6 +165,12 @@ export function SimpleEditor() {
 
   const editor = useEditor({
     immediatelyRender: false,
+    content: initialContent,
+    onUpdate: ({ editor }) => {
+      if (onUpdate) {
+        onUpdate(editor.getJSON());
+      }
+    },
     editorProps: {
       attributes: {
         autocomplete: "off",
@@ -206,6 +212,12 @@ export function SimpleEditor() {
     editor,
     overlayHeight: toolbarRef.current?.getBoundingClientRect().height ?? 0,
   })
+
+  useEffect(() => {
+    if (editor && initialContent && JSON.stringify(editor.getJSON()) !== JSON.stringify(initialContent)) {
+      editor.commands.setContent(initialContent);
+    }
+  }, [editor, initialContent]);
 
   useEffect(() => {
     if (!isMobile && mobileView !== "main") {

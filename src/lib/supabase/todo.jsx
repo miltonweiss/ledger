@@ -1,29 +1,61 @@
 import { supabase } from "./client"
 
 export async function getTodo (){
-    const { data, error } = await supabase
-  .from('tasks')
-  .select("*")
+    let { data, error } = await supabase
+      .from('tasks')
+      .select("*")
+      .is('killed_at', null)
+      .order('created_at', { ascending: false })
+
+  if (isMissingFocusTaskColumns(error)) {
+    ;({ data, error } = await supabase
+      .from('tasks')
+      .select("*")
+      .order('created_at', { ascending: false }))
+  }
   
   if (error) {
     console.error('Error fetching todos:', error);
     return [];
   }
   
-  console.log(data);
   return data || [];
 }
 
 export async function createTodo(todo){
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('tasks')
       .insert([{
         name: todo.name,
         done: todo.done || false,
-        due: todo.due || null
+        due: todo.due || null,
+        priority: todo.priority || 'Average',
+        area: todo.area || null,
+        work_type: todo.work_type || null,
+        block_type: todo.block_type || null,
+        energy_required: todo.energy_required || null,
+        definition_of_done: todo.definition_of_done || null,
+        estimated_minutes: todo.estimated_minutes || null,
+        actual_minutes: todo.actual_minutes || 0,
+        completed_at: todo.done ? new Date().toISOString() : null,
       }])
       .select()
+
+    if (isMissingFocusTaskColumns(error)) {
+      const retry = await supabase
+        .from('tasks')
+        .insert([{
+          name: todo.name,
+          done: todo.done || false,
+          due: todo.due || null,
+          priority: todo.priority || 'Average',
+        }])
+        .select()
+
+      if (!retry.error) return retry.data?.[0] || null;
+      error = retry.error;
+    }
 
     if (error) {
       console.error('Error creating todo:', error);
@@ -42,6 +74,17 @@ export async function createTodo(todo){
   }
 }
 
+function isMissingFocusTaskColumns(error) {
+  const message = `${error?.message || ""} ${error?.details || ""}`.toLowerCase();
+  return (
+    error?.code === "42703" ||
+    message.includes("killed_at") ||
+    message.includes("completed_at") ||
+    message.includes("area") ||
+    message.includes("work_type")
+  );
+}
+
 export async function deleteTodo(id){
   const { error } = await supabase
     .from('tasks')
@@ -58,11 +101,25 @@ export async function deleteTodo(id){
 
 
 export async function updateTodo(id, updates){
-  const { data, error } = await supabase
+  const payload = { ...updates };
+  if (Object.prototype.hasOwnProperty.call(payload, "done")) {
+    payload.completed_at = payload.done ? new Date().toISOString() : null;
+  }
+
+  let { data, error } = await supabase
     .from('tasks')
-    .update(updates)
+    .update(payload)
     .eq('id', id)
     .select()
+
+  if (isMissingFocusTaskColumns(error)) {
+    const fallbackPayload = { ...updates };
+    ;({ data, error } = await supabase
+      .from('tasks')
+      .update(fallbackPayload)
+      .eq('id', id)
+      .select())
+  }
 
   if (error) {
     console.error('Error updating todo:', error);
@@ -71,4 +128,3 @@ export async function updateTodo(id, updates){
 
   return data?.[0] || null;
 }
-

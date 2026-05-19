@@ -1,13 +1,14 @@
 "use client"
-import { Archive, AddPlus, Trash } from "./icons"
+import { History } from "lucide-react"
+import { AddPlus, Trash } from "./icons"
 import { useEffect, useState } from "react"
 import { getChats, deleteChat } from "@/lib/supabase/chats"
 import Link from "next/link"
 
 export function ChatDrawerToggle() {
     return (
-        <label htmlFor="my-drawer-5" className="drawer-button btn foreforeforeground borderDefault shadow-transparent drop-shadow-none">
-            <Archive />
+        <label htmlFor="my-drawer-5" className="drawer-button btn foreforeground borderDefault shadow-transparent drop-shadow-none">
+            <History size={18} />
         </label>
     )
 }
@@ -46,7 +47,7 @@ export default function ChatDrawer ({ children }){
             </div>
             <div className="drawer-side z-[999]">
                 <label htmlFor="my-drawer-5" aria-label="close sidebar" className="drawer-overlay"></label>
-                <ul className="menu foreforeforeground min-h-full gap-2 w-80 p-4">
+                <ul className="menu foreforeground min-h-full gap-2 w-80 p-4">
                     <li className="menu-title text-base mb-2">Chat History</li>
                     <li className="mb-2">
                         <Link href="/chat" className="flex items-center  font-medium">

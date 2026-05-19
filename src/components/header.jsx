@@ -1,5 +1,9 @@
 export default function Header (props){
     return(
-    <h1 className="mb-[1rem]"> <span className="deemphesize">{props.demph} </span> <span className="bold"> {props.emph} </span> </h1>
+        <div className="page-header">
+            {props.demph && <span className="page-header-eyebrow">{props.demph}</span>}
+            <h1 className="page-header-title">{props.emph}</h1>
+            {props.actions && <div className="page-header-actions">{props.actions}</div>}
+        </div>
     )
 }

@@ -1,7 +1,7 @@
 import { createYoutubeVideo } from '@/lib/supabase/videos'
 import { createYoutubeVideoChunk } from '@/lib/supabase/video_chunks'
 import { splitTextFromString } from '@/lib/langchain/textSplit'
-import { embedTexts } from '@/lib/supabase/embedding'
+import { embedTexts } from '@/lib/embedding'
 
 export async function POST(req) {
   try {

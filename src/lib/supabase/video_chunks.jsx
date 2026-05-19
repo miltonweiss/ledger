@@ -16,7 +16,7 @@ export async function getYoutubeVideoChunks (){
 
 export async function getSpecificYoutubeVideoChunk (id){
   const { data, error } = await supabase
-    .from('youtube_video_chunks')
+    .from('youtube_videos_chunks')
     .select("*")
     .eq('id', id)
     .single()

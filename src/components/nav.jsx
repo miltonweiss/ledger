@@ -1,16 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { Dashboard, Habits, ToDo, Notes, Bubble, Bookmark, Chatbubble } from "./icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Themeswap from "./themeswap";
-import { ChevronRight } from "lucide-react";
 
 const iconMap = {
   dashboard: Dashboard,
-  todo: Habits,
-  habits: ToDo,
+  todo: ToDo,
+  habits: Habits,
   notes: Notes,
   bubble: Bubble,
   bookmark: Bookmark,
@@ -19,7 +17,6 @@ const iconMap = {
 
 export default function NavBar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(true);
 
   const links = [
     { href: "/", name: "Dashboard", icon: "dashboard" },
@@ -29,82 +26,37 @@ export default function NavBar() {
   ];
 
   return (
-    <aside
-      className={`
-        fixed top-0 left-0 h-screen 
-        ${collapsed ? "w-16" : "w-56"}
-        foreground
-        bg-neutral-950 border-r border-neutral-800
-        flex flex-col justify-between py-6
-        transition-all duration-300 ease-in-out
-        z-50
-      `}
+    <nav
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-neutral-950/80 backdrop-blur-md border border-neutral-800 rounded-2xl px-3 py-2 flex items-center gap-1 z-50 shadow-2xl"
     >
-      {/* Top */}
-      <div className="flex flex-col gap-10">
+      {links.map((link) => {
+        const IconComponent = iconMap[link.icon];
+        const isActive = pathname === link.href;
 
-        {/* Logo + Toggle */}
-        <div className="flex items-center justify-between px-4">
-          {!collapsed && (
-            <span className="text-lg font-semibold text-white tracking-wide">
-              Ledger
-            </span>
-          )}
-
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="p-1 rounded-md hover:bg-neutral-800 transition"
+        return (
+          <Link
+            key={link.href}
+            href={link.href}
+            className={[
+              "dock-item flex flex-col items-center justify-center px-4 py-2 rounded-xl transition-all duration-200",
+              isActive
+                ? "dock-item-active"
+                : "text-neutral-400 hover:text-white hover:bg-neutral-900/50",
+            ].join(" ")}
           >
-            <ChevronRight
-              className={`transition-transform duration-300 ${
-                collapsed ? "" : "rotate-180"
-              }`}
-              size={18}
-            />
-          </button>
-        </div>
+            <IconComponent size={20} />
+            <span className="text-[10px] font-medium mt-1">
+              {link.name}
+            </span>
+          </Link>
+        );
+      })}
 
-        {/* Navigation */}
-        <nav className="flex flex-col gap-2 px-2">
-          {links.map((link) => {
-            const IconComponent = iconMap[link.icon];
-            const isActive = pathname === link.href;
+      <div className="w-px h-8 bg-neutral-800 mx-2" />
 
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`
-                  relative flex items-center gap-4
-                  px-3 py-2 rounded-xl
-                  transition-all duration-200
-                  ${isActive
-                    ? "bg-neutral-800 text-white"
-                    : "text-neutral-400 hover:text-white hover:bg-neutral-900"}
-                `}
-              >
-                <IconComponent />
-
-                {!collapsed && (
-                  <span className="text-sm font-medium">
-                    {link.name}
-                  </span>
-                )}
-
-                {/* Active indicator */}
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 bg-white rounded-r-md" />
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Bottom */}
-      <div className="flex justify-center px-2">
+      <div className="px-2 flex items-center justify-center">
         <Themeswap />
       </div>
-    </aside>
+    </nav>
   );
 }

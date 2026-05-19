@@ -20,7 +20,7 @@ export default function Themeswap() {
   };
 
   return (
-    <label className="swap swap-rotate pb-5 cursor-pointer">
+    <label className="swap swap-rotate cursor-pointer">
       <input 
         type="checkbox" 
         checked={!isDark} 

@@ -10,3 +10,12 @@ export async function splitText (id, typeMedia){
         return texts;
     
 }
+
+export async function splitTextFromString(text, typeMedia = "medium"){
+        const preset = CHUNKING_PRESETS[typeMedia] || { size: 1000, overlap: 150 }
+        const splitter = new RecursiveCharacterTextSplitter({
+                chunkSize: preset.size,
+                chunkOverlap: preset.overlap,
+        })
+        return splitter.createDocuments([text || ""])
+}

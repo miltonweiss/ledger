@@ -36,6 +36,7 @@ export async function createYoutubeVideo(video){
       .insert([{
         name: video.name || "",
         text: video.text || video.fileContent || "",
+        video_id: video.video_id || "",
       }])
       .select()
 

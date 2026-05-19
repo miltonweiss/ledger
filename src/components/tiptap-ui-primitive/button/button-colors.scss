@@ -7,12 +7,12 @@
   --tt-button-default-bg-color: var(--tt-gray-light-a-100);
   --tt-button-hover-bg-color: var(--tt-gray-light-200);
   --tt-button-active-bg-color: var(--tt-gray-light-a-200);
-  --tt-button-active-bg-color-emphasized: rgba(255, 117, 56, 0.15); //more important active state
+  --tt-button-active-bg-color-emphasized: rgba(99, 120, 220, 0.15); //more important active state
   --tt-button-active-bg-color-subdued: var(
     --tt-gray-light-a-200
   ); //less important active state
   --tt-button-active-hover-bg-color: var(--tt-gray-light-300);
-  --tt-button-active-hover-bg-color-emphasized: rgba(255, 117, 56, 0.25); //more important active state hover
+  --tt-button-active-hover-bg-color-emphasized: rgba(99, 120, 220, 0.25); //more important active state hover
   --tt-button-active-hover-bg-color-subdued: var(
     --tt-gray-light-a-300
   ); //less important active state hover
@@ -23,12 +23,12 @@
     --tt-button-default-bg-color: var(--tt-gray-dark-a-100);
     --tt-button-hover-bg-color: var(--tt-gray-dark-200);
     --tt-button-active-bg-color: var(--tt-gray-dark-a-200);
-    --tt-button-active-bg-color-emphasized: rgba(255, 117, 56, 0.2); //more important active state
+    --tt-button-active-bg-color-emphasized: rgba(99, 120, 220, 0.2); //more important active state
     --tt-button-active-bg-color-subdued: var(
       --tt-gray-dark-a-200
     ); //less important active state
     --tt-button-active-hover-bg-color: var(--tt-gray-dark-300);
-    --tt-button-active-hover-bg-color-emphasized: rgba(255, 117, 56, 0.3); //more important active state hover
+    --tt-button-active-hover-bg-color-emphasized: rgba(99, 120, 220, 0.3); //more important active state hover
     --tt-button-active-hover-bg-color-subdued: var(
       --tt-gray-dark-a-300
     ); //less important active state hover
@@ -140,12 +140,12 @@
     --tt-button-default-bg-color: var(--transparent);
     --tt-button-hover-bg-color: var(--tt-gray-light-200);
     --tt-button-active-bg-color: var(--tt-gray-light-a-100);
-    --tt-button-active-bg-color-emphasized: rgba(255, 117, 56, 0.15); //more important active state
+    --tt-button-active-bg-color-emphasized: rgba(99, 120, 220, 0.15); //more important active state
     --tt-button-active-bg-color-subdued: var(
       --tt-gray-light-a-100
     ); //less important active state
     --tt-button-active-hover-bg-color: var(--tt-gray-light-200);
-    --tt-button-active-hover-bg-color-emphasized: rgba(255, 117, 56, 0.25); //more important active state hover
+    --tt-button-active-hover-bg-color-emphasized: rgba(99, 120, 220, 0.25); //more important active state hover
     --tt-button-active-hover-bg-color-subdued: var(
       --tt-gray-light-a-200
     ); //less important active state hover
@@ -156,12 +156,12 @@
       --tt-button-default-bg-color: var(--transparent);
       --tt-button-hover-bg-color: var(--tt-gray-dark-200);
       --tt-button-active-bg-color: var(--tt-gray-dark-a-100);
-    --tt-button-active-bg-color-emphasized: rgba(255, 117, 56, 0.2); //more important active state
+    --tt-button-active-bg-color-emphasized: rgba(99, 120, 220, 0.2); //more important active state
     --tt-button-active-bg-color-subdued: var(
       --tt-gray-dark-a-100
     ); //less important active state
     --tt-button-active-hover-bg-color: var(--tt-gray-dark-200);
-    --tt-button-active-hover-bg-color-emphasized: rgba(255, 117, 56, 0.3); //more important active state hover
+    --tt-button-active-hover-bg-color-emphasized: rgba(99, 120, 220, 0.3); //more important active state hover
       --tt-button-active-hover-bg-color-subdued: var(
         --tt-gray-dark-a-200
       ); //less important active state hover
@@ -276,25 +276,25 @@
 
     /* Light mode */
     --tt-button-default-bg-color: var(--accent);
-    --tt-button-hover-bg-color: rgba(255, 117, 56, 0.9);
-    --tt-button-active-bg-color: rgba(255, 117, 56, 0.15);
-    --tt-button-active-bg-color-emphasized: rgba(255, 117, 56, 0.15); //more important active state
-    --tt-button-active-bg-color-subdued: rgba(255, 117, 56, 0.15); //less important active state
-    --tt-button-active-hover-bg-color: rgba(255, 117, 56, 0.25);
-    --tt-button-active-hover-bg-color-emphasized: rgba(255, 117, 56, 0.25); //more important active state hover
-    --tt-button-active-hover-bg-color-subdued: rgba(255, 117, 56, 0.25); //less important active state hover
+    --tt-button-hover-bg-color: rgba(99, 120, 220, 0.9);
+    --tt-button-active-bg-color: rgba(99, 120, 220, 0.15);
+    --tt-button-active-bg-color-emphasized: rgba(99, 120, 220, 0.15); //more important active state
+    --tt-button-active-bg-color-subdued: rgba(99, 120, 220, 0.15); //less important active state
+    --tt-button-active-hover-bg-color: rgba(99, 120, 220, 0.25);
+    --tt-button-active-hover-bg-color-emphasized: rgba(99, 120, 220, 0.25); //more important active state hover
+    --tt-button-active-hover-bg-color-subdued: rgba(99, 120, 220, 0.25); //less important active state hover
     --tt-button-disabled-bg-color: var(--tt-gray-light-a-100);
 
     /* Dark mode */
     .dark & {
       --tt-button-default-bg-color: var(--accent);
-      --tt-button-hover-bg-color: rgba(255, 117, 56, 0.9);
-      --tt-button-active-bg-color: rgba(255, 117, 56, 0.2);
-      --tt-button-active-bg-color-emphasized: rgba(255, 117, 56, 0.2); //more important active state
-      --tt-button-active-bg-color-subdued: rgba(255, 117, 56, 0.2); //less important active state
-      --tt-button-active-hover-bg-color: rgba(255, 117, 56, 0.3);
-      --tt-button-active-hover-bg-color-emphasized: rgba(255, 117, 56, 0.3); //more important active state hover
-      --tt-button-active-hover-bg-color-subdued: rgba(255, 117, 56, 0.3); //less important active state hover
+      --tt-button-hover-bg-color: rgba(99, 120, 220, 0.9);
+      --tt-button-active-bg-color: rgba(99, 120, 220, 0.2);
+      --tt-button-active-bg-color-emphasized: rgba(99, 120, 220, 0.2); //more important active state
+      --tt-button-active-bg-color-subdued: rgba(99, 120, 220, 0.2); //less important active state
+      --tt-button-active-hover-bg-color: rgba(99, 120, 220, 0.3);
+      --tt-button-active-hover-bg-color-emphasized: rgba(99, 120, 220, 0.3); //more important active state hover
+      --tt-button-active-hover-bg-color-subdued: rgba(99, 120, 220, 0.3); //less important active state hover
       --tt-button-disabled-bg-color: var(--tt-gray-dark-a-100);
     }
 

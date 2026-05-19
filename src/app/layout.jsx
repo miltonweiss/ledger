@@ -35,9 +35,9 @@ export default function RootLayout({ children }) {
       <body
         className={`${satoshi.variable} ${geistMono.variable} antialiased`}
       >
-        <div className="flex min-h-screen" style={{ overflow: 'visible' }}>
+        <div className="flex flex-col min-h-screen">
           <NavBar/>
-          <main className="flex-1 p-[1.5rem] pl-[7vw] flex flex-col ">
+          <main className="page-main flex-1 w-full p-[var(--space-lg)] pb-[10rem]">
             {children}
             <Toaster />
           </main>
