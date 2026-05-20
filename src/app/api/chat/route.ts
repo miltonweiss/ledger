@@ -14,7 +14,7 @@ import { NextRequest } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { findRelevantContent } from '@/lib/embedding'
 import personalities from '../../../../prompts'
-import { calculateDayStatus, canStopToday, getDefaultDayType, toLocalDateString } from '@/lib/focus-os/day.js'
+import { calculateCapacityMode, canStopToday, getDefaultDayType, toLocalDateString } from '@/lib/focus-os/day.js'
 import { buildTaskCleanerProposal, buildTodayRecommendation } from '@/lib/focus-os/recommendation.js'
 import { calculateWeeklyScore, getWeekRange } from '@/lib/focus-os/score.js'
 
@@ -185,10 +185,10 @@ async function getOrCreateFocusLog(date: string, supabase: any) {
   if (existing) return existing
 
   const dayType = getDefaultDayType(new Date(`${date}T12:00:00`))
-  const status = calculateDayStatus({ dayType } as any)
+  const capacityMode = calculateCapacityMode({ dayType } as any)
   const { data, error } = await supabase
     .from('daily_logs')
-    .insert([{ date, day_type: dayType, status }])
+    .insert([{ date, day_type: dayType, capacity_mode: capacityMode }])
     .select('*')
     .single()
 
@@ -228,18 +228,22 @@ async function retrieveFocusContext(userText: string, supabase: any) {
   const weekSessions = normalizeSessions(weekSessionsResult.data || [])
   const mainTask = tasks.find((task: any) => task.id === dailyLog.main_block_task_id) || null
   const sideTask = tasks.find((task: any) => task.id === dailyLog.side_block_task_id) || null
-  const status = calculateDayStatus({
+  const capacityMode = calculateCapacityMode({
     dayType: dailyLog.day_type,
     energy: dailyLog.energy_am,
     guilt: dailyLog.guilt_am,
+    mood: dailyLog.mood_am,
+    stress: dailyLog.stress_am,
+    sleep: dailyLog.sleep_quality,
+    recovery: dailyLog.recovery_level,
     mainBlockDone: dailyLog.main_block_done || mainTask?.done,
     shutdownDone: dailyLog.shutdown_done,
     override: dailyLog.status_override,
   } as any)
-  const recommendation = buildTodayRecommendation(tasks, { today: date, dayType: dailyLog.day_type, status })
+  const recommendation = buildTodayRecommendation(tasks, { today: date, dayType: dailyLog.day_type, capacityMode })
   const weeklyScore = calculateWeeklyScore({ sessions: weekSessions, dailyLogs: weekLogsResult.data || [], today: new Date() })
   const stopPermission = canStopToday({
-    dailyLog: { ...dailyLog, status },
+    dailyLog: { ...dailyLog, capacity_mode: capacityMode },
     shutdown: shutdownResult.data,
     mainTask,
     dayType: dailyLog.day_type,
@@ -248,7 +252,7 @@ async function retrieveFocusContext(userText: string, supabase: any) {
 
   return {
     date,
-    dailyLog: { ...dailyLog, status },
+    dailyLog: { ...dailyLog, capacity_mode: capacityMode },
     tasks,
     mainTask,
     sideTask,
@@ -274,7 +278,7 @@ function buildFocusSystemContext(focus: any): string {
   return `Focus OS context for today:
 Date: ${focus.date}
 Day type: ${focus.dailyLog.day_type}
-Status: ${focus.dailyLog.status}
+Capacity mode: ${focus.dailyLog.capacity_mode}
 Main block: ${focus.mainTask?.name || focus.recommendation?.mainBlock?.name || 'none'}
 Side block: ${focus.sideTask?.name || focus.recommendation?.sideBlock?.name || 'none'}
 Shutdown done: ${focus.dailyLog.shutdown_done ? 'yes' : 'no'}
