@@ -1,6 +1,7 @@
-import { supabase } from "./client";
+import { createSupabaseServer } from "./server";
 
 export async function getNotes() {
+  const supabase = await createSupabaseServer();
   const { data, error } = await supabase
     .from("notes")
     .select("*")
@@ -14,6 +15,7 @@ export async function getNotes() {
 }
 
 export async function getNote(id) {
+  const supabase = await createSupabaseServer();
   const { data, error } = await supabase
     .from("notes")
     .select("*")
@@ -28,12 +30,15 @@ export async function getNote(id) {
 }
 
 export async function createNote(note = {}) {
+  const supabase = await createSupabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from("notes")
     .insert([
       {
         title: note.title || "Untitled",
         content: note.content || {},
+        user_id: user?.id,
       },
     ])
     .select()
@@ -47,6 +52,7 @@ export async function createNote(note = {}) {
 }
 
 export async function updateNote(id, updates) {
+  const supabase = await createSupabaseServer();
   const { data, error } = await supabase
     .from("notes")
     .update({ ...updates, updated_at: new Date().toISOString() })
@@ -62,6 +68,7 @@ export async function updateNote(id, updates) {
 }
 
 export async function deleteNote(id) {
+  const supabase = await createSupabaseServer();
   const { error } = await supabase
     .from("notes")
     .delete()

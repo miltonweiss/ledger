@@ -32,12 +32,14 @@ export async function getSpecificChat (id){
 
 export async function createChat(chat){
   try {
+    const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from('chats')
       .insert([{
         conversation: chat.conversation || [],
         name: chat.name || new Date().toISOString(),
-        personality: chat.personality || null
+        personality: chat.personality || null,
+        user_id: user?.id,
       }])
       .select()
 

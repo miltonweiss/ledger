@@ -29,13 +29,18 @@ export async function getSpecificYoutubeVideoChunk (id){
   return data || null;
 }
 
+import { createSupabaseServer } from "./server"
+
 export async function createYoutubeVideoChunk(chunk){
   try {
+    const supabase = await createSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
     const payload = {
       name: chunk.name ?? '',
       content: chunk.content ?? '',
       embedding: chunk.embedding ?? [],
       chunks_number: chunk.number ?? 0,
+      user_id: user?.id,
     }
 
     let data = null

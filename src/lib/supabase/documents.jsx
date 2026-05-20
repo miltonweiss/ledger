@@ -32,12 +32,13 @@ export async function getSpecificDocument (id){
 
 export async function createDocuments(document){
   try {
+    const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from('documents')
       .insert([{
         name: document.name || "",
         text: document.fileContent || "",
-        
+        user_id: user?.id,
       }])
       .select()
 

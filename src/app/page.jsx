@@ -2,19 +2,22 @@
 
 import TodayCommandBar from "@/components/focus-os/TodayCommandBar";
 import MainBlockCard from "@/components/focus-os/MainBlockCard";
-import SideBlockCard from "@/components/focus-os/SideBlockCard";
+import SupportBlockCard from "@/components/focus-os/SupportBlockCard";
 import WeeklyScoreCard from "@/components/focus-os/WeeklyScoreCard";
-import AIOperatorCard from "@/components/focus-os/AIOperatorCard";
 import NotTodayList from "@/components/focus-os/NotTodayList";
-import StopPermissionModal from "@/components/focus-os/StopPermissionModal";
+import DailyLevelPanel from "@/components/focus-os/DailyLevelPanel";
 import FocusTimerModal from "@/components/focus-os/FocusTimerModal";
 import ShutdownModal from "@/components/focus-os/ShutdownModal";
-import FocusProposalCard from "@/components/focus-os/FocusProposalCard";
-import { CAPACITY_MODE, DAY_TYPES, FOCUS_MODES } from "@/lib/focus-os/constants.js";
-import { buildTaskCleanerProposal } from "@/lib/focus-os/recommendation.js";
+import { DAY_TYPES, FOCUS_MODES, getCapacityBudgetMinutes } from "@/lib/focus-os/constants.js";
 import { calculateCapacityMode } from "@/lib/focus-os/day.js";
 import { getTodayFocusState, updateDailyLog } from "@/lib/supabase/focus-os";
+import { buildSupportPresetTask, getRecommendedSupportPresets, getSupportPresetById } from "@/lib/focus-os/support-block-presets.js";
+import { buildTodayRecommendation } from "@/lib/focus-os/recommendation.js";
+import { validateDefinitionOfDone } from "@/lib/focus-os/validation.js";
+import ClarifyTaskModal from "@/components/focus-os/ClarifyTaskModal";
 import { useEffect, useMemo, useState } from "react";
+
+const FOCUS_SYNC_EVENT = "focus-os-daily-log-updated";
 
 // ─── Skeleton ─────────────────────────────────────────────────
 function DashboardSkeleton() {
@@ -39,13 +42,18 @@ export default function Dashboard() {
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
   const [timerConfig, setTimerConfig] = useState(null);
-  const [proposal, setProposal] = useState(null);
+  const [clarifyTask, setClarifyTask] = useState(null);
 
   async function refresh() {
     setLoading(true);
     const next = await getTodayFocusState();
     setState(next);
     setLoading(false);
+    return next;
+  }
+
+  function broadcastFocusState(next) {
+    window.dispatchEvent(new CustomEvent(FOCUS_SYNC_EVENT, { detail: { state: next } }));
   }
 
   useEffect(() => {
@@ -56,8 +64,24 @@ export default function Dashboard() {
       setState(next);
       setLoading(false);
     }
+
+    function handleFocusSync(event) {
+      if (event.detail?.state) {
+        setState(event.detail.state);
+        setLoading(false);
+        return;
+      }
+
+      load();
+    }
+
     load();
-    return () => { cancelled = true; };
+    window.addEventListener(FOCUS_SYNC_EVENT, handleFocusSync);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(FOCUS_SYNC_EVENT, handleFocusSync);
+    };
   }, []);
 
   const activeTasks = useMemo(
@@ -79,8 +103,15 @@ export default function Dashboard() {
   }
 
   const { dailyLog, weeklyScore, recommendation } = state;
-  const mainTask = state.mainTask || recommendation?.mainBlock || null;
-  const sideTask = state.sideTask || recommendation?.sideBlock || null;
+  const selectedMainTask = activeTasks.find((task) => task.id === dailyLog.main_block_task_id) || null;
+  const selectedSupportTask = activeTasks.find((task) => task.id === dailyLog.side_block_task_id) || null;
+  const selectedSupportPreset = getSupportPresetById(dailyLog.support_preset_id);
+  const selectedSupportPresetTask = buildSupportPresetTask(selectedSupportPreset);
+  const recommendedMainTask = dailyLog.skip_main_block || recommendation?.mainBlock?.id === dailyLog.side_block_task_id
+    ? null
+    : recommendation?.mainBlock || null;
+  const mainTask = dailyLog.skip_main_block ? null : selectedMainTask || recommendedMainTask;
+  const sideTask = selectedSupportTask || selectedSupportPresetTask || recommendation?.sideBlock || null;
   const cutTasks = state.cutTasks?.length ? state.cutTasks : recommendation?.cut || [];
   const isSunday = dailyLog.day_type === DAY_TYPES.SUNDAY;
   
@@ -91,30 +122,83 @@ export default function Dashboard() {
       dayType:       updates.day_type        || dailyLog.day_type,
       energy:        updates.energy_am       ?? dailyLog.energy_am,
       guilt:         updates.guilt_am        ?? dailyLog.guilt_am,
+      mood:          updates.mood_am         ?? dailyLog.mood_am,
+      stress:        updates.stress_am       ?? dailyLog.stress_am,
+      sleep:         updates.sleep_quality   ?? dailyLog.sleep_quality,
+      recovery:      updates.recovery_level  ?? dailyLog.recovery_level,
       mainBlockDone: updates.main_block_done ?? dailyLog.main_block_done,
       shutdownDone:  updates.shutdown_done   ?? dailyLog.shutdown_done,
       override:      updates.status_override ?? dailyLog.status_override,
     });
-    await updateDailyLog(dailyLog.id, { ...updates, capacity_mode: nextCapacityMode });
-    await refresh();
+    const updatedDailyLog = { ...dailyLog, ...updates, capacity_mode: nextCapacityMode };
+    const nextRecommendation = buildTodayRecommendation(state.tasks || [], {
+      today: state.date,
+      dayType: updatedDailyLog.day_type,
+      capacityMode: nextCapacityMode,
+    });
+    const nextState = {
+      ...state,
+      dailyLog: updatedDailyLog,
+      recommendation: nextRecommendation,
+      mainTask: (state.tasks || []).find((task) => task.id === updatedDailyLog.main_block_task_id) || null,
+      sideTask: (state.tasks || []).find((task) => task.id === updatedDailyLog.side_block_task_id) || null,
+      cutTasks: (state.tasks || []).filter((task) => updatedDailyLog.cut_task_ids?.includes(task.id)),
+    };
+
+    setState(nextState);
+    broadcastFocusState(nextState);
+
+    const savedDailyLog = await updateDailyLog(dailyLog.id, { ...updates, capacity_mode: nextCapacityMode });
+    if (savedDailyLog) {
+      const savedState = { ...nextState, dailyLog: { ...updatedDailyLog, ...savedDailyLog } };
+      setState(savedState);
+      broadcastFocusState(savedState);
+    }
   }
 
-  async function commitToday() {
+  async function handlePresetClick(preset) {
+    await handleDailyLogUpdate({ support_preset_id: preset.id, side_block_task_id: null, side_block_done: false });
+  }
+
+  async function handleMainSelect(id) {
+    if (id === "nothing") {
+      await handleDailyLogUpdate({ main_block_task_id: null, skip_main_block: true });
+      return;
+    }
+
     await handleDailyLogUpdate({
-      mode: 'execute',
-      main_block_task_id: dailyLog.main_block_task_id || mainTask?.id || null,
-      side_block_task_id: dailyLog.side_block_task_id || sideTask?.id || null,
-      cut_task_ids: cutTasks.map(t => t.id)
+      main_block_task_id: id || null,
+      skip_main_block: false,
+      side_block_task_id: id && id === dailyLog.side_block_task_id ? null : dailyLog.side_block_task_id,
     });
   }
 
-  function createCleanProposal() {
-    setProposal({
-      ...buildTaskCleanerProposal(state.tasks, { today: state.date, dayType: dailyLog.day_type, capacityMode: dailyLog.capacity_mode }),
-      daily_log_id: dailyLog.id,
-      date:         state.date,
+  const showCloseDay = Boolean(dailyLog.main_block_done || mainTask?.done) || Boolean(dailyLog.cut_task_ids?.length > 0 && !dailyLog.main_block_task_id);
+
+  const supportPresets = useMemo(() => {
+    if (!dailyLog || !state) return [];
+    return getRecommendedSupportPresets({ 
+      dayType: dailyLog.day_type, 
+      weekday: state.weekday,
+      mainTask 
     });
-  }
+  }, [dailyLog, mainTask, state]);
+
+  const commitValidation = useMemo(() => {
+    const mainDoD = mainTask ? validateDefinitionOfDone(mainTask.definition_of_done) : { valid: true };
+    const sideDoD = sideTask && !sideTask.isPreset ? validateDefinitionOfDone(sideTask.definition_of_done) : { valid: true };
+    
+    const capacityLimitMinutes = getCapacityBudgetMinutes(dailyLog.day_type);
+    const totalPlanned = (mainTask?.estimated_minutes || 0) + (sideTask?.estimated_minutes || 0);
+    const overCapacity = totalPlanned > capacityLimitMinutes;
+
+    return {
+      valid: mainDoD.valid && sideDoD.valid && !overCapacity,
+      mainError: !mainDoD.valid ? mainDoD.reason : null,
+      sideError: !sideDoD.valid ? sideDoD.reason : null,
+      capacityError: overCapacity ? `Total planned (${totalPlanned}m) exceeds ${dailyLog.day_type} capacity (${capacityLimitMinutes}m).` : null
+    };
+  }, [mainTask, sideTask, dailyLog.day_type]);
 
   if (isSunday) {
     return (
@@ -137,8 +221,6 @@ export default function Dashboard() {
     );
   }
 
-  const showCloseDay = Boolean(dailyLog.main_block_done || mainTask?.done) || Boolean(dailyLog.cut_task_ids?.length > 0 && !dailyLog.main_block_task_id);
-
   return (
     <div style={{ padding: "0.5rem", display: "flex", flexDirection: "column", gap: "0.875rem" }}>
       <TodayCommandBar
@@ -148,30 +230,38 @@ export default function Dashboard() {
       />
 
       {mode === 'plan' && (
-        <div className="dash-grid">
+        <div className="dash-grid dash-stagger-enter">
           <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
             <MainBlockCard
               task={mainTask}
               tasks={activeTasks}
-              selectedId={dailyLog.main_block_task_id || ""}
-              onSelect={(id) => handleDailyLogUpdate({ main_block_task_id: id || null })}
+              selectedId={dailyLog.skip_main_block ? "nothing" : dailyLog.main_block_task_id || ""}
+              onSelect={handleMainSelect}
               onStart={() => setTimerConfig({ task: mainTask, mode: FOCUS_MODES.MAIN })}
             />
-            <SideBlockCard
+            <SupportBlockCard
               task={sideTask}
               tasks={activeTasks}
               selectedId={dailyLog.side_block_task_id || ""}
-              onSelect={(id) => handleDailyLogUpdate({ side_block_task_id: id || null })}
+              selectedPresetId={dailyLog.support_preset_id || ""}
+              onSelect={(id) => handleDailyLogUpdate({ side_block_task_id: id || null, support_preset_id: null, side_block_done: false })}
               onStart={() => setTimerConfig({ task: sideTask, mode: FOCUS_MODES.SIDE })}
+              presets={supportPresets}
+              onPresetClick={handlePresetClick}
+              dayType={dailyLog.day_type}
             />
-            
-            <button className="dash-btn-accent" style={{ padding: "1rem", fontSize: "1rem" }} onClick={commitToday}>
-              Commit Today
-            </button>
+
+            {!commitValidation.valid && (
+              <div style={{ fontSize: "0.8rem", color: "var(--red-accent)", textAlign: "center", padding: "0.5rem 1rem" }}>
+                {commitValidation.mainError && `Main: ${commitValidation.mainError}`}
+                {commitValidation.sideError && `Support: ${commitValidation.sideError}`}
+                {commitValidation.capacityError && commitValidation.capacityError}
+              </div>
+            )}
           </div>
           
           <div className="dash-card-right-col">
-            <AIOperatorCard onCleanTasks={createCleanProposal} />
+            <DailyLevelPanel dailyLog={dailyLog} onUpdate={handleDailyLogUpdate} />
             <NotTodayList cutTasks={cutTasks} />
             
             {recommendation?.needsClarification?.length > 0 && (
@@ -184,8 +274,11 @@ export default function Dashboard() {
                 </div>
                 <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0 0", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                   {recommendation.needsClarification.slice(0, 5).map(task => (
-                    <li key={task.id} style={{ padding: "0.5rem", backgroundColor: "var(--bg-secondary)", borderRadius: "6px", fontSize: "0.85rem" }}>
-                      {task.name}
+                    <li key={task.id} className="clarify-task-row">
+                      <span className="clarify-task-name">{task.name}</span>
+                      <button className="clarify-task-btn" onClick={() => setClarifyTask(task)}>
+                        Clarify
+                      </button>
                     </li>
                   ))}
                   {recommendation.needsClarification.length > 5 && (
@@ -197,31 +290,30 @@ export default function Dashboard() {
               </div>
             )}
 
-            {proposal && (
-              <div className="dash-card">
-                <FocusProposalCard proposal={proposal} tasks={state.tasks} onApplied={refresh} />
-              </div>
-            )}
           </div>
         </div>
       )}
 
       {mode === 'execute' && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem", maxWidth: "600px", margin: "0 auto", width: "100%" }}>
+        <div className="dash-stagger-enter" style={{ display: "flex", flexDirection: "column", gap: "0.875rem", maxWidth: "600px", margin: "0 auto", width: "100%" }}>
           <MainBlockCard
             task={mainTask}
             tasks={activeTasks}
-            selectedId={dailyLog.main_block_task_id || ""}
-            onSelect={(id) => handleDailyLogUpdate({ main_block_task_id: id || null })}
+            selectedId={dailyLog.skip_main_block ? "nothing" : dailyLog.main_block_task_id || ""}
+            onSelect={handleMainSelect}
             onStart={() => setTimerConfig({ task: mainTask, mode: FOCUS_MODES.MAIN })}
           />
           {sideTask && (
-            <SideBlockCard
+            <SupportBlockCard
               task={sideTask}
               tasks={activeTasks}
               selectedId={dailyLog.side_block_task_id || ""}
-              onSelect={(id) => handleDailyLogUpdate({ side_block_task_id: id || null })}
+              selectedPresetId={dailyLog.support_preset_id || ""}
+              onSelect={(id) => handleDailyLogUpdate({ side_block_task_id: id || null, support_preset_id: null, side_block_done: false })}
               onStart={() => setTimerConfig({ task: sideTask, mode: FOCUS_MODES.SIDE })}
+              presets={supportPresets}
+              onPresetClick={handlePresetClick}
+              dayType={dailyLog.day_type}
             />
           )}
           {showCloseDay && (
@@ -244,8 +336,8 @@ export default function Dashboard() {
       )}
 
       {mode === 'closed' && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem", maxWidth: "600px", margin: "0 auto", width: "100%" }}>
-          <div className="dash-card" style={{ textAlign: "center", padding: "2rem" }}>
+        <div className="dash-stagger-enter" style={{ display: "flex", flexDirection: "column", gap: "0.875rem", maxWidth: "600px", margin: "0 auto", width: "100%" }}>
+          <div className="dash-card dash-card-interactive" style={{ textAlign: "center", padding: "2rem" }}>
             <h2 style={{ marginBottom: "1rem" }}>Day Closed</h2>
             <p style={{ color: "var(--text-muted)" }}>Heute geschlossen. Nächster Schritt ist gespeichert.</p>
             {state.shutdown?.next_step && (
@@ -276,6 +368,14 @@ export default function Dashboard() {
           mode={timerConfig.mode || FOCUS_MODES.GREEN}
           onClose={() => setTimerConfig(null)}
           onSaved={refresh}
+        />
+      )}
+
+      {clarifyTask && (
+        <ClarifyTaskModal
+          task={clarifyTask}
+          onClose={() => setClarifyTask(null)}
+          onUpdated={refresh}
         />
       )}
     </div>

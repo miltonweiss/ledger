@@ -2,9 +2,14 @@ import { createYoutubeVideo } from '@/lib/supabase/videos'
 import { createYoutubeVideoChunk } from '@/lib/supabase/video_chunks'
 import { splitTextFromString } from '@/lib/langchain/textSplit'
 import { embedTexts } from '@/lib/embedding'
+import { createSupabaseServer } from '@/lib/supabase/server'
 
 export async function POST(req) {
   try {
+    const supabase = await createSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
     const { videoId, title, transcript } = await req.json()
 
     if (!videoId || !transcript) {

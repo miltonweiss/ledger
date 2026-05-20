@@ -1,6 +1,6 @@
 "use client";
 
-import { CAPACITY_MODE, DAY_TYPES, CAPACITY_BUDGET } from "@/lib/focus-os/constants.js";
+import { DAY_TYPES, getCapacityBudgetMinutes } from "@/lib/focus-os/constants.js";
 import { Shield } from "lucide-react";
 
 function StatusBadge({ mode }) {
@@ -13,15 +13,20 @@ export default function TodayCommandBar({
   dailyLog,
 }) {
   const isSunday = dailyLog.day_type === DAY_TYPES.SUNDAY;
-  const budget = CAPACITY_BUDGET[dailyLog.day_type]?.total || 0;
+  const budgetMinutes = getCapacityBudgetMinutes(dailyLog.day_type);
   
   // Format hours and mins
-  const hours = Math.floor(budget / 60);
-  const mins = budget % 60;
-  const budgetText = budget > 0 ? `${hours}h ${mins > 0 ? `${mins}m` : ""}` : "0h";
+  const hours = Math.floor(budgetMinutes / 60);
+  const mins = budgetMinutes % 60;
+  const budgetText = budgetMinutes > 0 ? `${hours}h ${mins > 0 ? `${mins}m` : ""}` : "0h";
+  
+  const heroVariant = isSunday ? "day-hero-protected" : 
+    (dailyLog.capacity_mode?.toLowerCase() === "recovery" ? "day-hero-recovery" : 
+     dailyLog.capacity_mode?.toLowerCase() === "stability" ? "day-hero-stability" : 
+     "day-hero-growth");
 
   return (
-    <div className="day-hero" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-main)", border: "1px solid var(--border-color)", padding: "1rem", borderRadius: "12px" }}>
+    <div className={`day-hero ${heroVariant} dash-card-interactive`}>
       <div className="day-hero-top" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div className="day-hero-date">
           <span className="day-hero-eyebrow" style={{ color: "var(--text-muted)", fontSize: "0.8rem", textTransform: "uppercase" }}>Today</span>

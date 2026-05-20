@@ -1,4 +1,6 @@
 import { openai } from '@ai-sdk/openai'
+import { mistral } from '@ai-sdk/mistral'
+import { deepseek } from '@ai-sdk/deepseek'
 import {
   streamText,
   createUIMessageStream,
@@ -9,7 +11,7 @@ import {
   type UIMessage,
 } from 'ai'
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { findRelevantContent } from '@/lib/embedding'
 import personalities from '../../../../prompts'
 import { calculateDayStatus, canStopToday, getDefaultDayType, toLocalDateString } from '@/lib/focus-os/day.js'
@@ -28,10 +30,16 @@ const RAG_MIN_SIMILARITY = 0.3
 const RAG_MAX_CONTEXT_CHARS = 10_000
 const FOCUS_CONTEXT_MAX_TASKS = 12
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_KEY!
-)
+
+const DEFAULT_PROVIDER = 'openai'
+const DEFAULT_MODEL = 'gpt-4.1'
+const DEFAULT_TEMPERATURE = 0.35
+
+function resolveModel(provider: string, model: string) {
+  if (provider === 'mistral') return mistral(model)
+  if (provider === 'deepseek') return deepseek(model)
+  return openai(model || DEFAULT_MODEL)
+}
 
 function getBaseSystemPrompt(personality: number): string {
   const selected = personalities[personality] || personalities[0]
@@ -70,7 +78,7 @@ interface RagChunk {
   title?: string
 }
 
-async function retrieveContext(userText: string): Promise<{
+async function retrieveContext(userText: string, supabase: any): Promise<{
   context: string
   chunks: RagChunk[]
 }> {
@@ -162,7 +170,7 @@ async function retrieveContext(userText: string): Promise<{
   return { context, chunks }
 }
 
-async function getOrCreateFocusLog(date: string) {
+async function getOrCreateFocusLog(date: string, supabase: any) {
   const { data: existing, error: fetchError } = await supabase
     .from('daily_logs')
     .select('*')
@@ -192,9 +200,9 @@ async function getOrCreateFocusLog(date: string) {
   return data
 }
 
-async function retrieveFocusContext(userText: string) {
+async function retrieveFocusContext(userText: string, supabase: any) {
   const date = toLocalDateString()
-  const dailyLog = await getOrCreateFocusLog(date)
+  const dailyLog = await getOrCreateFocusLog(date, supabase)
   if (!dailyLog) return null
 
   const { start, end } = getWeekRange(new Date())
@@ -329,12 +337,32 @@ function minTask(task: any) {
 export async function POST(request: NextRequest) {
   console.log('[RAG] POST: request received')
   try {
+    const supabase = await createSupabaseServer()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
-    const { messages = [], personality = 0 } = body
+    const {
+      messages = [],
+      personality = 0,
+      provider = DEFAULT_PROVIDER,
+      model = DEFAULT_MODEL,
+      temperature = DEFAULT_TEMPERATURE,
+    } = body
+
+    const resolvedTemperature =
+      typeof temperature === 'number' && temperature >= 0 && temperature <= 2
+        ? temperature
+        : DEFAULT_TEMPERATURE
 
     console.log('[RAG] POST: parsed body', {
       messagesCount: messages?.length ?? 0,
       personality,
+      provider,
+      model,
+      temperature: resolvedTemperature,
     })
 
     if (!Array.isArray(messages)) {
@@ -368,7 +396,7 @@ export async function POST(request: NextRequest) {
     // 3. Retrieve (always — let similarity threshold filter)
     console.log('[RAG] POST: step 3 – retrieve RAG context')
     const [{ context: ragContext, chunks: ragChunks }, focusContext] =
-      await Promise.all([retrieveContext(userText), retrieveFocusContext(userText)])
+      await Promise.all([retrieveContext(userText, supabase), retrieveFocusContext(userText, supabase)])
     console.log('[RAG] POST: RAG result', {
       ragContextLength: ragContext.length,
       ragChunksCount: ragChunks.length,
@@ -430,10 +458,10 @@ export async function POST(request: NextRequest) {
           })
         }
 
-        console.log('[RAG] POST: execute – calling streamText (gpt-4.1)')
+        console.log('[RAG] POST: execute – calling streamText', { provider, model })
         const result = streamText({
-          model: openai('gpt-4.1'),
-          temperature: 0.35,
+          model: resolveModel(provider, model),
+          temperature: resolvedTemperature,
           maxOutputTokens: 2500,
           messages: finalMessages,
         })

@@ -24,6 +24,7 @@ export async function getTodo (){
 
 export async function createTodo(todo){
   try {
+    const { data: { user } } = await supabase.auth.getUser();
     let { data, error } = await supabase
       .from('tasks')
       .insert([{
@@ -39,6 +40,7 @@ export async function createTodo(todo){
         estimated_minutes: todo.estimated_minutes || null,
         actual_minutes: todo.actual_minutes || 0,
         completed_at: todo.done ? new Date().toISOString() : null,
+        user_id: user?.id,
       }])
       .select()
 
@@ -50,6 +52,7 @@ export async function createTodo(todo){
           done: todo.done || false,
           due: todo.due || null,
           priority: todo.priority || 'Average',
+          user_id: user?.id,
         }])
         .select()
 

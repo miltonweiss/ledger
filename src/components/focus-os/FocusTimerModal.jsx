@@ -104,7 +104,7 @@ export default function FocusTimerModal({
       dailyLog,
       actualMinutes,
       goalItems,
-      markDone: Boolean(task?.id),
+      markDone: Boolean(task?.id && !task.isPreset),
     });
 
     setRunning(false);
@@ -114,7 +114,7 @@ export default function FocusTimerModal({
   }
 
   async function handleSaveDefinition(value) {
-    if (!task?.id) return;
+    if (!task?.id || task.isPreset) return;
     setSavingDefinition(true);
     const updated = await updateTodo(task.id, { definition_of_done: value });
     setSavingDefinition(false);
@@ -127,7 +127,7 @@ export default function FocusTimerModal({
   }
 
   async function handleMoveToMonday() {
-    if (!task?.id) return;
+    if (!task?.id || task.isPreset) return;
     const monday = getNextMonday();
     const updated = await updateTodo(task.id, { due: monday });
     if (updated) {

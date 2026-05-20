@@ -8,10 +8,12 @@ import personalities from '../../../prompts';
 import { CHAT_RAG_API } from '@/lib/chat-api';
 import { createChat, updateChat } from '@/lib/supabase/chats';
 import ChatMessageList from "@/components/chat/chat-message-list";
+import ChatSettingsPanel, { useChatSettings } from "@/components/chat/ChatSettingsPanel";
 
 export default function ChatApp (){
     const [input, setInput] = useState('');
     const [personality, setPersonality] = useState(0);
+    const [chatSettings, setChatSettings] = useChatSettings();
     const [chatId, setChatId] = useState(null);
     const chatNameRef = useRef(null);
     const messagesRef = useRef([]);
@@ -126,6 +128,7 @@ export default function ChatApp (){
 
       />
       <div className="absolute right-0 flex items-center gap-3">
+          <ChatSettingsPanel settings={chatSettings} onChange={setChatSettings} />
           <select 
             value={personality} 
             onChange={(e) => setPersonality(Number(e.target.value))}
@@ -157,7 +160,7 @@ export default function ChatApp (){
         onSubmit={e => {
           e.preventDefault();
           if (!isInputEmpty && !isLoading) {
-            sendMessage({ text: input }, { body: { personality } });
+            sendMessage({ text: input }, { body: { personality, ...chatSettings } });
             setInput('');
           }
         }}
@@ -176,7 +179,7 @@ export default function ChatApp (){
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               if (!isInputEmpty && !isLoading) {
-                sendMessage({ text: input }, { body: { personality } });
+                sendMessage({ text: input }, { body: { personality, ...chatSettings } });
                 setInput('');
               }
             }

@@ -7,7 +7,7 @@ export default function NotTodayList({ cutTasks }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="dash-card">
+    <div className="dash-card dash-card-interactive">
       <div 
         className="dash-card-header" 
         style={{ cursor: "pointer", margin: expanded ? "0 0 1rem 0" : "0" }}
@@ -23,7 +23,7 @@ export default function NotTodayList({ cutTasks }) {
       </div>
       
       {expanded && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <div className="dash-collapse-body" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {cutTasks?.length ? (
             cutTasks.slice(0, 6).map((task) => (
               <div key={task.id} className="cut-item" style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>

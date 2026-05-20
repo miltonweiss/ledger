@@ -10,6 +10,8 @@
     "test:focus": "node --test --experimental-default-type=module src/lib/focus-os/*.test.js"
   },
   "dependencies": {
+    "@ai-sdk/deepseek": "^2.0.35",
+    "@ai-sdk/mistral": "^3.0.37",
     "@ai-sdk/openai": "^3.0.25",
     "@ai-sdk/react": "^3.0.72",
     "@emotion/react": "^11.14.0",
@@ -22,6 +24,7 @@
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-slot": "^1.2.4",
+    "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.93.3",
     "@tiptap/core": "^3.18.0",
     "@tiptap/extension-highlight": "^3.18.0",
@@ -60,6 +63,8 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/lodash.throttle": "^4.1.9",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
     "babel-plugin-react-compiler": "1.0.0",
     "daisyui": "^5.5.14",
     "eslint": "^9",

@@ -30,13 +30,18 @@ export async function getSpecificDocumentChunk (id){
   return data || null;
 }
 
+import { createSupabaseServer } from "./server"
+
 export async function createDocumentsChunks(chunk){
   try {
+    const supabase = await createSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
     const payload = {
       name: chunk.name ?? '',
       content: chunk.content ?? '',
       embedding: chunk.embedding ?? [],
       chunks_number: chunk.number ?? 0,
+      user_id: user?.id,
     }
 
     if (chunk.document_id != null) {

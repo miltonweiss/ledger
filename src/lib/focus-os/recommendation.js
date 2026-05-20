@@ -14,7 +14,7 @@ function priorityScore(priority) {
 
 function energyScore(task, status) {
   const energy = task.energy_required || "Medium";
-  if (status === "Recovery / Stop Day") return energy === "Low" ? 16 : energy === "Medium" ? 4 : -18;
+  if (status === "Recovery / Stop Day" || status === "Protected Capacity") return energy === "Low" ? 16 : energy === "Medium" ? 4 : -18;
   if (energy === "High") return 8;
   if (energy === "Medium") return 10;
   return 6;
@@ -69,7 +69,7 @@ export function buildTodayRecommendation(tasks = [], { today, dayType, capacityM
     };
   }
 
-  const mainBlock = plannableCandidates[0]?.task || null;
+  const mainBlock = plannableCandidates.find(({ task }) => task.block_type !== "Side Block")?.task || null;
   const sideBlock = plannableCandidates.find(({ task }) => task.id !== mainBlock?.id && task.energy_required !== "High")?.task || null;
   const cut = plannableCandidates
     .filter(({ task }) => task.id !== mainBlock?.id && task.id !== sideBlock?.id)

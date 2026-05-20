@@ -96,6 +96,40 @@
   transform: translateY(-2px);
 }
 
+.dock-focus-action {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.dock-focus-action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.dock-focus-action-accent {
+  background: color-mix(in srgb, var(--surface-overlay) 40%, transparent);
+  color: var(--accent) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--accent) 15%, transparent), inset 0 0 8px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.dock-focus-action-accent:hover {
+  background: color-mix(in srgb, var(--surface-overlay) 80%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 25%, transparent), inset 0 0 12px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.dock-focus-action-neutral {
+  background: color-mix(in srgb, var(--surface-overlay) 72%, transparent);
+  color: var(--text-secondary);
+}
+
+.dock-focus-action-neutral:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-raised));
+  color: var(--accent);
+}
+
 .typing-skeleton {
   padding: 8px 4px;
 }
@@ -773,6 +807,15 @@ button:hover{
   color: var(--text-primary);
   padding: 0.7rem 0.8rem;
   width: 100%;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.focus-input:focus-visible,
+.focus-textarea:focus-visible,
+.focus-number-input:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-default));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: none;
 }
 
 .focus-number-input {
@@ -1554,6 +1597,91 @@ button:hover{
   line-height: 1.2;
 }
 
+/* Support Presets */
+.support-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.support-preset-card {
+  background-color: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  padding: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.support-preset-card:hover {
+  border-color: var(--accent);
+  background-color: var(--surface-overlay);
+  transform: translateY(-1px);
+}
+
+.support-preset-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.support-preset-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.support-capacity-warning {
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--red-accent);
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  margin-top: 1rem;
+}
+
+/* Clarify Task */
+.clarify-task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  background-color: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.clarify-task-name {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clarify-task-btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  background-color: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.clarify-task-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
 /* Block task card */
 .block-task-card {
   background-color: var(--surface-sunken);
@@ -1831,6 +1959,170 @@ button:hover{
 
 .dash-btn-ghost:active { transform: scale(0.96); }
 
+/* Auth — login / sign-out */
+.auth-layout {
+  margin: calc(-1 * var(--space-lg));
+  margin-bottom: calc(-1 * 10rem);
+}
+
+.auth-page {
+  min-height: calc(100dvh - 2 * var(--space-lg));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+}
+
+.auth-card {
+  width: min(420px, 100%);
+  gap: 1.5rem;
+}
+
+.auth-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  text-align: center;
+}
+
+.auth-card-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.auth-error {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--red-accent);
+  background-color: var(--red-muted);
+  border: 1px solid var(--red-border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.8rem;
+}
+
+.auth-submit {
+  width: 100%;
+  justify-content: center;
+  padding: 0.7rem 1rem;
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+}
+
+.auth-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.auth-spinner {
+  animation: auth-spin 0.8s linear infinite;
+}
+
+@keyframes auth-spin {
+  to { transform: rotate(360deg); }
+}
+
+.dock-sign-out {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.dock-sign-out:hover {
+  background: color-mix(in srgb, var(--red-accent) 14%, var(--surface-raised));
+  color: var(--red-accent) !important;
+  opacity: 1;
+}
+
+.dock-sign-out:active {
+  transform: scale(0.96);
+}
+
+.settings-page {
+  max-width: 36rem;
+  margin: 0 auto;
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 0.25rem;
+}
+
+.settings-row-copy {
+  min-width: 0;
+}
+
+.settings-row-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-row-description {
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.theme-toggle-placeholder {
+  display: inline-block;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.settings-sign-out-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--red-accent) 35%, var(--border-default));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--red-accent) 8%, var(--surface-sunken));
+  color: var(--red-accent);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, transform 120ms ease;
+}
+
+.settings-sign-out-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red-accent) 14%, var(--surface-sunken));
+  border-color: color-mix(in srgb, var(--red-accent) 50%, var(--border-default));
+}
+
+.settings-sign-out-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 /* Sunday shield */
 .sunday-shield {
   background-color: color-mix(in srgb, var(--green-muted) 60%, var(--surface-raised));
@@ -1875,4 +2167,58 @@ button:hover{
 
 .smooth-slider.snapping {
   animation: slider-snap 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ─── Dashboard UX Polish ───────────────────────────────────── */
+
+.dash-card-interactive {
+  transition: border-color 200ms ease;
+}
+
+.dash-collapse-body {
+  animation: collapse-enter 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top center;
+}
+
+@keyframes collapse-enter {
+  from {
+    opacity: 0;
+    transform: scaleY(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+}
+
+.dash-stagger-enter > * {
+  opacity: 0;
+  animation: stagger-fade-in 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dash-stagger-enter > *:nth-child(1) { animation-delay: 0ms; }
+.dash-stagger-enter > *:nth-child(2) { animation-delay: 60ms; }
+.dash-stagger-enter > *:nth-child(3) { animation-delay: 120ms; }
+.dash-stagger-enter > *:nth-child(4) { animation-delay: 180ms; }
+.dash-stagger-enter > *:nth-child(5) { animation-delay: 240ms; }
+.dash-stagger-enter > *:nth-child(n+6) { animation-delay: 300ms; }
+
+@keyframes stagger-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-collapse-body,
+  .dash-stagger-enter > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }

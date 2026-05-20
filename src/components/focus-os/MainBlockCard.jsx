@@ -6,7 +6,7 @@ export default function MainBlockCard({ task, tasks, selectedId, onSelect, onSta
   const hasDefinition = Boolean(task?.definition_of_done);
 
   return (
-    <div className="dash-card" style={{ border: task ? "1px solid var(--accent)" : undefined }}>
+    <div className="dash-card dash-card-interactive" style={{ border: task ? "1px solid var(--accent)" : undefined }}>
       <div className="dash-card-header">
         <div className="dash-card-title">Main Block</div>
       </div>
@@ -19,6 +19,7 @@ export default function MainBlockCard({ task, tasks, selectedId, onSelect, onSta
           onChange={(e) => onSelect(e.target.value)}
         >
           <option value="">Select from recommendation...</option>
+          <option value="nothing">Nothing</option>
           {tasks.map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}

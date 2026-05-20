@@ -29,14 +29,19 @@ export async function getSpecificYoutubeVideo (id){
   return data || null;
 }
 
+import { createSupabaseServer } from "./server"
+
 export async function createYoutubeVideo(video){
   try {
+    const supabase = await createSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from('youtube_videos')
       .insert([{
         name: video.name || "",
         text: video.text || video.fileContent || "",
         video_id: video.video_id || "",
+        user_id: user?.id,
       }])
       .select()
 

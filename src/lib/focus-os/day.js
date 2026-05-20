@@ -39,16 +39,26 @@ export function calculateCapacityMode({
   dayType,
   energy = null,
   guilt = null,
+  mood = null,
+  stress = null,
+  sleep = null,
+  recovery = null,
   mainBlockDone = false,
   shutdownDone = false,
   override = null,
 } = {}) {
   if (override) return override;
   if (dayType === DAY_TYPES.SUNDAY) return CAPACITY_MODE.PROTECTED;
-  if (Number(energy) <= 3 || Number(guilt) >= 8) return CAPACITY_MODE.PROTECTED;
+  
+  const e = energy !== null ? Number(energy) : 5;
+  const g = guilt !== null ? Number(guilt) : 0;
+  const s = stress !== null ? Number(stress) : 5;
+  const sl = sleep !== null ? Number(sleep) : 5;
+
+  if (e <= 3 || g >= 8 || s >= 8 || sl <= 3) return CAPACITY_MODE.PROTECTED;
   if (dayType === DAY_TYPES.FREE) return CAPACITY_MODE.LIMITED;
   if (mainBlockDone && shutdownDone) return CAPACITY_MODE.LIMITED;
-  if (dayType === DAY_TYPES.LONG && Number(energy) >= 7) return CAPACITY_MODE.FULL;
+  if (dayType === DAY_TYPES.LONG && e >= 7 && s < 7) return CAPACITY_MODE.FULL;
   return CAPACITY_MODE.LIMITED;
 }
 

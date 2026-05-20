@@ -1,21 +1,24 @@
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServer } from "@/lib/supabase/server";
 import { getDefaultDayType, calculateCapacityMode } from "@/lib/focus-os/day.js";
+import { recoverDailyLogAfterConflict } from "@/lib/supabase/daily-log-recovery";
 
 export const dynamic = "force-dynamic";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_KEY,
-);
 
 export async function POST(request) {
   try {
+    const supabase = await createSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { proposal, confirmKill = false } = await request.json();
     if (!proposal) {
       return Response.json({ error: "Missing proposal" }, { status: 400 });
     }
 
-    const dailyLogId = await resolveDailyLogId(proposal);
+    const dailyLogId = await resolveDailyLogId(proposal, supabase);
     if (!dailyLogId) {
       return Response.json({ error: "Could not resolve daily log" }, { status: 400 });
     }
@@ -56,9 +59,11 @@ export async function POST(request) {
   }
 }
 
-async function resolveDailyLogId(proposal) {
+async function resolveDailyLogId(proposal, supabase) {
   if (proposal.daily_log_id) return proposal.daily_log_id;
   if (!proposal.date) return null;
+
+  const { data: { user } } = await supabase.auth.getUser();
 
   const { data: existing, error: fetchError } = await supabase
     .from("daily_logs")
@@ -72,9 +77,21 @@ async function resolveDailyLogId(proposal) {
   const capacityMode = calculateCapacityMode({ dayType });
   const { data, error } = await supabase
     .from("daily_logs")
-    .insert([{ date: proposal.date, day_type: dayType, capacity_mode: capacityMode, mode: "plan" }])
+    .insert([{
+      date: proposal.date,
+      day_type: dayType,
+      capacity_mode: capacityMode,
+      mode: "plan",
+      user_id: user?.id,
+    }])
     .select("id")
     .single();
+
+  if (error?.code === "23505") {
+    const recovered = await recoverDailyLogAfterConflict(proposal.date, supabase);
+    return recovered?.id || null;
+  }
+
   if (error) throw error;
   return data?.id || null;
 }

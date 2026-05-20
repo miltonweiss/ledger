@@ -9,12 +9,14 @@ import personalities from '../../../../prompts';
 import { CHAT_RAG_API } from '@/lib/chat-api';
 import { getSpecificChat, updateChat } from '@/lib/supabase/chats';
 import ChatMessageList from "@/components/chat/chat-message-list";
+import ChatSettingsPanel, { useChatSettings } from "@/components/chat/ChatSettingsPanel";
 
 export default function ChatPage() {
     const { id } = useParams();
     const router = useRouter();
     const [input, setInput] = useState('');
     const [personality, setPersonality] = useState(0);
+    const [chatSettings, setChatSettings] = useChatSettings();
     const [loaded, setLoaded] = useState(false);
     const chatNameRef = useRef(null);
     const messagesRef = useRef([]);
@@ -160,7 +162,8 @@ export default function ChatPage() {
                         demph={"Your"}
                         emph={"AI Assistant"}
                     />
-                    <div className="absolute right-0">
+                    <div className="absolute right-0 flex items-center gap-3">
+                        <ChatSettingsPanel settings={chatSettings} onChange={setChatSettings} />
                         <ChatDrawerToggle />
                     </div>
                 </div>
@@ -178,7 +181,7 @@ export default function ChatPage() {
                     onSubmit={e => {
                         e.preventDefault();
                         if (!isInputEmpty && !isLoading) {
-                            sendMessage({ text: input }, { body: { personality } });
+                            sendMessage({ text: input }, { body: { personality, ...chatSettings } });
                             setInput('');
                         }
                     }}
@@ -195,7 +198,7 @@ export default function ChatPage() {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
                                     if (!isInputEmpty && !isLoading) {
-                                        sendMessage({ text: input }, { body: { personality } });
+                                        sendMessage({ text: input }, { body: { personality, ...chatSettings } });
                                         setInput('');
                                     }
                                 }

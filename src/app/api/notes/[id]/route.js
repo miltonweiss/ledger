@@ -1,7 +1,12 @@
 import { getNote, updateNote, deleteNote } from "@/lib/supabase/notes";
+import { createSupabaseServer } from "@/lib/supabase/server";
 
 export async function GET(req, { params }) {
   try {
+    const supabase = await createSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     const note = await getNote(id);
     if (!note) {
@@ -16,6 +21,10 @@ export async function GET(req, { params }) {
 
 export async function PATCH(req, { params }) {
   try {
+    const supabase = await createSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     const body = await req.json();
     const note = await updateNote(id, body);
@@ -31,6 +40,10 @@ export async function PATCH(req, { params }) {
 
 export async function DELETE(req, { params }) {
   try {
+    const supabase = await createSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
     const { id } = await params;
     const success = await deleteNote(id);
     if (!success) {

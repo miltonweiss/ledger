@@ -217,7 +217,7 @@ async def index_markdown(payload: IndexMarkdownRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=422, detail="No chunks produced from markdown.")
 
     supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-    supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_KEY")
+    supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
     if not supabase_url or not supabase_key:
         raise HTTPException(
             status_code=500,

@@ -1,42 +1,123 @@
 import { supabase } from "./client";
+import { recoverDailyLogAfterConflict } from "./daily-log-recovery";
 import { calculateCapacityMode, canStopToday, getDefaultDayType, getWeekdayName, toLocalDateString } from "@/lib/focus-os/day.js";
 import { buildTodayRecommendation } from "@/lib/focus-os/recommendation.js";
 import { calculateWeeklyScore, getWeekRange } from "@/lib/focus-os/score.js";
+import { buildSupportPresetTask, getSupportPresetById } from "@/lib/focus-os/support-block-presets.js";
+import { createTodo } from "./todo";
+
+const pendingDailyLogs = new Map();
 
 export async function getOrCreateDailyLog(date = toLocalDateString()) {
-  const { data: existing, error: fetchError } = await withTimeout(
-    supabase
-      .from("daily_logs")
-      .select("*")
-      .eq("date", date)
-      .maybeSingle(),
+  if (pendingDailyLogs.has(date)) {
+    return pendingDailyLogs.get(date);
+  }
+
+  const promise = getOrCreateDailyLogInner(date);
+  pendingDailyLogs.set(date, promise);
+
+  try {
+    return await promise;
+  } finally {
+    pendingDailyLogs.delete(date);
+  }
+}
+
+async function fetchDailyLogByDate(date, client = supabase) {
+  const { data, error } = await withTimeout(
+    client.from("daily_logs").select("*").eq("date", date).maybeSingle(),
     { data: null, error: { code: "FOCUS_TIMEOUT", message: "Focus OS request timed out" } },
   );
 
-  if (fetchError) {
-    console.error("[Focus OS] Error fetching daily log:", fetchError.code, fetchError.message, fetchError.details || "");
-    return null;
+  if (error) {
+    console.error("[Focus OS] Error fetching daily log:", error.code, error.message, error.details || "");
+    return { data: null, error };
   }
 
-  if (existing) return existing;
+  return { data, error: null };
+}
+
+async function syncDailyLogDayType(existing, date) {
+  const dayType = getDefaultDayType(`${date}T12:00:00`);
+  if (existing.day_type === dayType) {
+    return existing;
+  }
+
+  const capacityMode = calculateCapacityMode({
+    dayType,
+    energy: existing.energy_am,
+    guilt: existing.guilt_am,
+    mood: existing.mood_am,
+    stress: existing.stress_am,
+    sleep: existing.sleep_quality,
+    recovery: existing.recovery_level,
+    mainBlockDone: existing.main_block_done,
+    shutdownDone: existing.shutdown_done,
+    override: existing.status_override,
+  });
+
+  const { data: updated, error: updateError } = await withTimeout(
+    supabase
+      .from("daily_logs")
+      .update({ day_type: dayType, capacity_mode: capacityMode, updated_at: new Date().toISOString() })
+      .eq("id", existing.id)
+      .select()
+      .single(),
+    { data: null, error: { code: "FOCUS_TIMEOUT", message: "Focus OS request timed out" } },
+  );
+
+  if (updateError) {
+    console.error("[Focus OS] Error syncing daily log day type:", updateError.code, updateError.message, updateError.details || "");
+    return existing;
+  }
+
+  return updated;
+}
+
+async function getOrCreateDailyLogInner(date) {
+  const { data: existing, error: fetchError } = await fetchDailyLogByDate(date);
+  if (fetchError) return null;
+  if (existing) return syncDailyLogDayType(existing, date);
 
   const dayType = getDefaultDayType(`${date}T12:00:00`);
   const capacityMode = calculateCapacityMode({ dayType });
+  const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await withTimeout(
     supabase
       .from("daily_logs")
-      .insert([{ date, day_type: dayType, capacity_mode: capacityMode, mode: "plan" }])
+      .insert([{ date, day_type: dayType, capacity_mode: capacityMode, mode: "plan", user_id: user?.id }])
       .select()
       .single(),
     { data: null, error: { code: "FOCUS_TIMEOUT", message: "Focus OS request timed out" } },
   );
 
   if (error) {
+    if (error.code === "23505") {
+      const recovered = await recoverDailyLogAfterConflict(date);
+      if (recovered) return syncDailyLogDayType(recovered, date);
+    }
+
     console.error("[Focus OS] Error creating daily log:", error.code, error.message, error.details || "");
     return null;
   }
 
   return data;
+}
+
+export async function createSupportBlockTaskFromPreset(preset, { date }) {
+  const taskData = {
+    name: preset.title,
+    due: date,
+    priority: "Average",
+    area: preset.area,
+    work_type: preset.workType,
+    energy_required: preset.energy,
+    estimated_minutes: preset.defaultDurationMinutes,
+    block_type: "Side Block",
+    definition_of_done: preset.defaultDoD,
+  };
+
+  return await createTodo(taskData);
 }
 
 export async function updateDailyLog(id, updates) {
@@ -161,11 +242,17 @@ export async function getTodayFocusState({ date = toLocalDateString(), tasks = n
 
   const allTasks = tasksResult.data || [];
   const mainTask = allTasks.find((task) => task.id === dailyLog.main_block_task_id) || null;
-  const sideTask = allTasks.find((task) => task.id === dailyLog.side_block_task_id) || null;
+  const selectedSideTask = allTasks.find((task) => task.id === dailyLog.side_block_task_id) || null;
+  const selectedSupportPresetTask = buildSupportPresetTask(getSupportPresetById(dailyLog.support_preset_id));
+  const sideTask = selectedSideTask || selectedSupportPresetTask || null;
   const capacityMode = calculateCapacityMode({
     dayType: dailyLog.day_type,
     energy: dailyLog.energy_am,
     guilt: dailyLog.guilt_am,
+    mood: dailyLog.mood_am,
+    stress: dailyLog.stress_am,
+    sleep: dailyLog.sleep_quality,
+    recovery: dailyLog.recovery_level,
     mainBlockDone: dailyLog.main_block_done || mainTask?.done,
     shutdownDone: dailyLog.shutdown_done,
     override: dailyLog.status_override,
@@ -209,17 +296,19 @@ export async function getTodayFocusState({ date = toLocalDateString(), tasks = n
 }
 
 export async function startFocusSession({ task, dailyLogId, mode, plannedMinutes, goalItems = [] }) {
+  const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from("focus_sessions")
     .insert([
       {
-        task_id: task?.id || null,
+        task_id: task?.isPreset ? null : task?.id || null,
         daily_log_id: dailyLogId,
         mode,
         planned_minutes: plannedMinutes,
         goal_text: task?.definition_of_done || "",
         goal_items: goalItems,
         started_at: new Date().toISOString(),
+        user_id: user?.id,
       },
     ])
     .select()
@@ -252,7 +341,7 @@ export async function finishFocusSession({ sessionId, task, dailyLog, actualMinu
     return null;
   }
 
-  if (task?.id) {
+  if (task?.id && !task.isPreset) {
     const nextActual = Number(task.actual_minutes || 0) + Number(actualMinutes || 0);
     const taskUpdates = { actual_minutes: nextActual };
     if (markDone) {
@@ -271,12 +360,17 @@ export async function finishFocusSession({ sessionId, task, dailyLog, actualMinu
     }
   }
 
+  if (task?.isPreset && dailyLog?.support_preset_id === task.preset_id) {
+    await updateDailyLog(dailyLog.id, { side_block_done: true });
+  }
+
   return session;
 }
 
 export async function saveShutdown({ dailyLog, produced, nextStep, nextStepDate, stopPermissionGranted }) {
   if (!dailyLog?.id) return null;
 
+  const { data: { user } } = await supabase.auth.getUser();
   const { data: shutdown, error } = await supabase
     .from("shutdowns")
     .insert([
@@ -286,6 +380,7 @@ export async function saveShutdown({ dailyLog, produced, nextStep, nextStepDate,
         next_step: nextStep,
         next_step_date: nextStepDate,
         stop_permission_granted: stopPermissionGranted,
+        user_id: user?.id,
       },
     ])
     .select()
@@ -303,6 +398,7 @@ export async function saveShutdown({ dailyLog, produced, nextStep, nextStepDate,
   });
 
   if (nextStep) {
+    const { data: { user } } = await supabase.auth.getUser();
     await supabase.from("tasks").insert([
       {
         name: nextStep,
@@ -315,6 +411,7 @@ export async function saveShutdown({ dailyLog, produced, nextStep, nextStepDate,
         energy_required: "Medium",
         definition_of_done: nextStep,
         estimated_minutes: 45,
+        user_id: user?.id,
       },
     ]);
   }
@@ -323,9 +420,10 @@ export async function saveShutdown({ dailyLog, produced, nextStep, nextStepDate,
 }
 
 export async function saveWeeklyReview(review) {
+  const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from("weekly_reviews")
-    .insert([review])
+    .insert([{ ...review, user_id: user?.id }])
     .select()
     .single();
 

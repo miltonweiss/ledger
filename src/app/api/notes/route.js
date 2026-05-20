@@ -1,7 +1,12 @@
 import { getNotes, createNote } from "@/lib/supabase/notes";
+import { createSupabaseServer } from "@/lib/supabase/server";
 
 export async function GET() {
   try {
+    const supabase = await createSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
     const notes = await getNotes();
     return Response.json(notes);
   } catch (error) {
@@ -12,6 +17,10 @@ export async function GET() {
 
 export async function POST(req) {
   try {
+    const supabase = await createSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
     const body = await req.json();
     const note = await createNote(body);
     if (!note) {

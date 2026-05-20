@@ -20,11 +20,16 @@ export const CAPACITY_MODE = {
 };
 
 export const CAPACITY_BUDGET = {
-  "Long Day":         { main: 90,  side: 40, total: 180 },
-  "Short Day":        { main: 75,  side: 20, total: 120 },
-  "Free Day":         { main: 120, side: 0,  total: 180 },
+  "Long Day":         { main: 30,  side: 30, total: 60 },
+  "Short Day":        { main: 90,  side: 30, total: 120 },
+  "Free Day":         { main: 120, side: 60,  total: 180 },
   "Protected Sunday": { main: 0,   side: 0,  total: 0   },
 };
+
+export function getCapacityBudgetMinutes(dayType) {
+  const budget = CAPACITY_BUDGET[dayType] || { main: 0, side: 0 };
+  return (budget.main || 0) + (budget.side || 0);
+}
 
 export const FOCUS_MODES = {
   GREEN: "Green Work",
@@ -57,8 +62,8 @@ export const WEEKDAY_DAY_TYPES = {
   0: DAY_TYPES.SUNDAY,
   1: DAY_TYPES.LONG,
   2: DAY_TYPES.SHORT,
-  3: DAY_TYPES.LONG,
-  4: DAY_TYPES.SHORT,
+  3: DAY_TYPES.SHORT,
+  4: DAY_TYPES.LONG,
   5: DAY_TYPES.LONG,
   6: DAY_TYPES.FREE,
 };
