@@ -6,6 +6,8 @@ import { openai } from '@ai-sdk/openai'
 import { embedMany } from 'ai'
 
 const EMBEDDING_MODEL = openai.embedding('text-embedding-3-small')
+let rpcLookupComplete = false
+let resolvedRpcCandidate = null
 
 /**
  * Get a single embedding for a query string (same as embed API uses for chunks).
@@ -59,7 +61,6 @@ export async function findRelevantContent(queryText, supabaseClient, options = {
     )
 
     if (topRpcSimilarity > 0) {
-      console.log('[RAG] findRelevantContent: RPC returned', rpcMatches.length, 'matches')
       return rpcMatches
     }
 
@@ -70,8 +71,6 @@ export async function findRelevantContent(queryText, supabaseClient, options = {
       topRpcSimilarity,
     })
   }
-  console.log('[RAG] findRelevantContent: no RPC results, using fallback (document_chunks table)')
-
   // Fallback: fetch chunks with embeddings and rank by cosine similarity
   // Schema: id, content, embedding, chunks_number, name, date_Added
   let chunks = null
@@ -147,10 +146,18 @@ async function findRelevantContentWithRpc(supabaseClient, queryEmbedding, topK) 
     },
   ]
 
-  for (const candidate of rpcCandidates) {
+  const candidates = rpcLookupComplete
+    ? resolvedRpcCandidate
+      ? [resolvedRpcCandidate]
+      : []
+    : rpcCandidates
+
+  for (const candidate of candidates) {
     try {
       const { data, error } = await supabaseClient.rpc(candidate.fn, candidate.args)
       if (error || !Array.isArray(data) || data.length === 0) continue
+      resolvedRpcCandidate = candidate
+      rpcLookupComplete = true
       return data
         .map(normalizeMatchRow)
         .filter((row) => row.text && Number.isFinite(row.similarity))
@@ -159,6 +166,11 @@ async function findRelevantContentWithRpc(supabaseClient, queryEmbedding, topK) 
     } catch (_) {
       // RPC does not exist or signature mismatch; move to next candidate.
     }
+  }
+
+  if (!rpcLookupComplete) {
+    rpcLookupComplete = true
+    resolvedRpcCandidate = null
   }
 
   return []

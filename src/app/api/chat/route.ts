@@ -27,13 +27,73 @@ export const revalidate = 0
  */
 const RAG_TOP_K = 5
 const RAG_MIN_SIMILARITY = 0.3
-const RAG_MAX_CONTEXT_CHARS = 10_000
+const RAG_MAX_CONTEXT_CHARS = 6_000
 const FOCUS_CONTEXT_MAX_TASKS = 12
+const CHAT_HISTORY_MESSAGE_LIMIT = 16
 
 
 const DEFAULT_PROVIDER = 'openai'
-const DEFAULT_MODEL = 'gpt-4.1'
+const DEFAULT_MODEL = 'gpt-5.5'
 const DEFAULT_TEMPERATURE = 0.35
+const DEBUG_CHAT = process.env.CHAT_DEBUG === '1'
+
+const DAILY_LOG_SELECT = [
+  'id',
+  'date',
+  'day_type',
+  'energy_am',
+  'guilt_am',
+  'mood_am',
+  'stress_am',
+  'sleep_quality',
+  'recovery_level',
+  'main_block_task_id',
+  'side_block_task_id',
+  'main_block_done',
+  'side_block_done',
+  'shutdown_done',
+  'status_override',
+  'capacity_mode',
+].join(',')
+const TASK_SELECT = [
+  'id',
+  'name',
+  'done',
+  'due',
+  'priority',
+  'area',
+  'work_type',
+  'block_type',
+  'energy_required',
+  'definition_of_done',
+  'estimated_minutes',
+  'actual_minutes',
+  'completed_at',
+  'killed_at',
+  'created_at',
+].join(',')
+const SESSION_SELECT = [
+  'id',
+  'task_id',
+  'daily_log_id',
+  'mode',
+  'planned_minutes',
+  'actual_minutes',
+  'started_at',
+  'ended_at',
+  'completed',
+  'tasks(id,name,area,work_type)',
+].join(',')
+const SHUTDOWN_SELECT = 'id,daily_log_id,next_step,next_step_date,stop_permission_granted,created_at'
+
+function debugChat(message: string, payload?: unknown) {
+  if (!DEBUG_CHAT) return
+  if (payload === undefined) {
+    console.log(message)
+    return
+  }
+  console.log(message, payload)
+}
 
 function resolveModel(provider: string, model: string) {
   if (provider === 'mistral') return mistral(model)
@@ -69,6 +129,62 @@ function getUserMessageText(message: any): string {
   return ''
 }
 
+function getModelMessageText(message: ModelMessage): string {
+  const { content } = message
+  if (typeof content === 'string') return content.trim()
+  if (Array.isArray(content)) {
+    return content
+      .map((part: any) => (part?.type === 'text' && typeof part.text === 'string' ? part.text : ''))
+      .join('')
+      .trim()
+  }
+  return ''
+}
+
+function hasToolCalls(message: ModelMessage): boolean {
+  const calls = (message as any).toolCalls ?? (message as any).tool_calls
+  return Array.isArray(calls) && calls.length > 0
+}
+
+/** Drop empty user/assistant turns — Mistral rejects assistant messages with no content or tool_calls. */
+function sanitizeModelMessages(messages: ModelMessage[]): ModelMessage[] {
+  return messages.filter((message) => {
+    if (message.role === 'assistant') {
+      return hasToolCalls(message) || getModelMessageText(message).length > 0
+    }
+    if (message.role === 'user') {
+      return getModelMessageText(message).length > 0
+    }
+    return true
+  })
+}
+
+type ChatContextMode = 'auto' | 'fast' | 'sources' | 'focus' | 'full'
+
+const RAG_HINT_RE =
+  /\b(source|sources|docs?|documents?|document|knowledge|note|notes|uploaded|transcript|video|youtube|citation|cite|rag|according to|based on|quelle|quellen|dokument|dokumente|notiz|notizen|hochgeladen|transkript|wissen|laut)\b/i
+const FOCUS_HINT_RE =
+  /\b(focus|focus os|task|tasks|todo|to-do|main block|side block|shutdown|today|day|plan|planning|guilt|energy|weekly score|wso|cash session|shrink|clarify|fake productivity|stop permission|aufgabe|aufgaben|heute|tag|planen|energie)\b/i
+
+function normalizeContextMode(value: unknown): ChatContextMode {
+  if (value === 'fast' || value === 'sources' || value === 'focus' || value === 'full') {
+    return value
+  }
+  return 'auto'
+}
+
+function resolveContextPlan(userText: string, mode: ChatContextMode) {
+  if (mode === 'fast') return { rag: false, focus: false }
+  if (mode === 'sources') return { rag: true, focus: false }
+  if (mode === 'focus') return { rag: false, focus: true }
+  if (mode === 'full') return { rag: true, focus: true }
+
+  return {
+    rag: RAG_HINT_RE.test(userText),
+    focus: FOCUS_HINT_RE.test(userText),
+  }
+}
+
 // ─── RAG: retrieve & format ───────────────────────────────────────────────
 
 interface RagChunk {
@@ -82,20 +198,20 @@ async function retrieveContext(userText: string, supabase: any): Promise<{
   context: string
   chunks: RagChunk[]
 }> {
-  console.log('[RAG] retrieveContext: start', {
+  debugChat('[RAG] retrieveContext: start', {
     userTextLength: userText?.length ?? 0,
     userTextPreview: userText?.trim().slice(0, 80) + (userText?.length > 80 ? '...' : ''),
   })
 
   if (!userText.trim()) {
-    console.log('[RAG] retrieveContext: empty userText, skip retrieval')
+    debugChat('[RAG] retrieveContext: empty userText, skip retrieval')
     return { context: '', chunks: [] }
   }
 
   let results: any[]
   try {
       results = await findRelevantContent(userText, supabase, { topK: RAG_TOP_K })
-    console.log('[RAG] retrieveContext: findRelevantContent returned', {
+    debugChat('[RAG] retrieveContext: findRelevantContent returned', {
       count: results?.length ?? 0,
       rawSample: results?.[0] ? { keys: Object.keys(results[0]), similarity: results[0].similarity ?? results[0].score } : null,
     })
@@ -105,7 +221,7 @@ async function retrieveContext(userText: string, supabase: any): Promise<{
   }
 
   if (!results?.length) {
-    console.log('[RAG] retrieveContext: no results')
+    debugChat('[RAG] retrieveContext: no results')
     return { context: '', chunks: [] }
   }
 
@@ -127,24 +243,17 @@ async function retrieveContext(userText: string, supabase: any): Promise<{
     })
   }
 
-  console.log('[RAG] retrieveContext: after filter/sort/slice', {
+  debugChat('[RAG] retrieveContext: after filter/sort/slice', {
     RAG_MIN_SIMILARITY,
     RAG_TOP_K,
     beforeFilterCount: beforeFilter.length,
     afterFilterCount: beforeFilter.filter((c) => c.score >= RAG_MIN_SIMILARITY).length,
     chunksCount: chunks.length,
     chunkScores: chunks.map((c) => c.score.toFixed(3)),
-    chunks: chunks.map((c, i) => ({
-      index: i + 1,
-      score: c.score,
-      id: c.id,
-      title: c.title,
-      text: c.text,
-    })),
   })
 
   if (!chunks.length) {
-    console.log('[RAG] retrieveContext: no chunks above threshold')
+    debugChat('[RAG] retrieveContext: no chunks above threshold')
     return { context: '', chunks: [] }
   }
 
@@ -157,23 +266,22 @@ async function retrieveContext(userText: string, supabase: any): Promise<{
 
   if (body.length > RAG_MAX_CONTEXT_CHARS) {
     body = body.slice(0, RAG_MAX_CONTEXT_CHARS) + '\n\n[TRUNCATED]'
-    console.log('[RAG] retrieveContext: context truncated', { RAG_MAX_CONTEXT_CHARS, bodyLength: body.length })
+    debugChat('[RAG] retrieveContext: context truncated', { RAG_MAX_CONTEXT_CHARS, bodyLength: body.length })
   }
 
   const context = `Use the following sources to answer. Cite as [Source X] when used. If none are relevant, ignore them.\n\n${body}`
-  console.log('[RAG] retrieveContext: done', {
+  debugChat('[RAG] retrieveContext: done', {
     contextLength: context.length,
     chunksCount: chunks.length,
-    chunksWithText: chunks.map((c, i) => ({ source: i + 1, score: c.score, text: c.text })),
   })
 
   return { context, chunks }
 }
 
-async function getOrCreateFocusLog(date: string, supabase: any) {
+async function getOrCreateFocusLog(date: string, supabase: any, userId?: string) {
   const { data: existing, error: fetchError } = await supabase
     .from('daily_logs')
-    .select('*')
+    .select(DAILY_LOG_SELECT)
     .eq('date', date)
     .maybeSingle()
 
@@ -188,8 +296,8 @@ async function getOrCreateFocusLog(date: string, supabase: any) {
   const capacityMode = calculateCapacityMode({ dayType } as any)
   const { data, error } = await supabase
     .from('daily_logs')
-    .insert([{ date, day_type: dayType, capacity_mode: capacityMode }])
-    .select('*')
+    .insert([{ date, day_type: dayType, capacity_mode: capacityMode, user_id: userId }])
+    .select(DAILY_LOG_SELECT)
     .single()
 
   if (error) {
@@ -200,9 +308,9 @@ async function getOrCreateFocusLog(date: string, supabase: any) {
   return data
 }
 
-async function retrieveFocusContext(userText: string, supabase: any) {
+async function retrieveFocusContext(userText: string, supabase: any, userId?: string) {
   const date = toLocalDateString()
-  const dailyLog = await getOrCreateFocusLog(date, supabase)
+  const dailyLog = await getOrCreateFocusLog(date, supabase, userId)
   if (!dailyLog) return null
 
   const { start, end } = getWeekRange(new Date())
@@ -210,11 +318,11 @@ async function retrieveFocusContext(userText: string, supabase: any) {
   const endDate = toLocalDateString(end)
 
   const [tasksResult, todaySessionsResult, shutdownResult, weekSessionsResult, weekLogsResult] = await Promise.all([
-    supabase.from('tasks').select('*').is('killed_at', null).order('created_at', { ascending: false }),
-    supabase.from('focus_sessions').select('*, tasks(*)').eq('daily_log_id', dailyLog.id),
-    supabase.from('shutdowns').select('*').eq('daily_log_id', dailyLog.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('focus_sessions').select('*, tasks(*)').gte('started_at', start.toISOString()).lte('started_at', end.toISOString()),
-    supabase.from('daily_logs').select('*').gte('date', startDate).lte('date', endDate),
+    supabase.from('tasks').select(TASK_SELECT).is('killed_at', null).order('created_at', { ascending: false }),
+    supabase.from('focus_sessions').select(SESSION_SELECT).eq('daily_log_id', dailyLog.id),
+    supabase.from('shutdowns').select(SHUTDOWN_SELECT).eq('daily_log_id', dailyLog.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('focus_sessions').select(SESSION_SELECT).gte('started_at', start.toISOString()).lte('started_at', end.toISOString()),
+    supabase.from('daily_logs').select(DAILY_LOG_SELECT).gte('date', startDate).lte('date', endDate),
   ])
 
   if (tasksResult.error) console.error('[Focus OS] tasks fetch failed', tasksResult.error)
@@ -339,7 +447,7 @@ function minTask(task: any) {
 // ─── POST handler ─────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  console.log('[RAG] POST: request received')
+  debugChat('[RAG] POST: request received')
   try {
     const supabase = await createSupabaseServer()
     const { data: { user } } = await supabase.auth.getUser()
@@ -354,18 +462,21 @@ export async function POST(request: NextRequest) {
       provider = DEFAULT_PROVIDER,
       model = DEFAULT_MODEL,
       temperature = DEFAULT_TEMPERATURE,
+      contextMode: rawContextMode = 'auto',
     } = body
+    const contextMode = normalizeContextMode(rawContextMode)
 
     const resolvedTemperature =
       typeof temperature === 'number' && temperature >= 0 && temperature <= 2
         ? temperature
         : DEFAULT_TEMPERATURE
 
-    console.log('[RAG] POST: parsed body', {
+    debugChat('[RAG] POST: parsed body', {
       messagesCount: messages?.length ?? 0,
       personality,
       provider,
       model,
+      contextMode,
       temperature: resolvedTemperature,
     })
 
@@ -379,9 +490,9 @@ export async function POST(request: NextRequest) {
     )
 
     // 1. Base system prompt
-    console.log('[RAG] POST: step 1 – selecting personality prompt')
+    debugChat('[RAG] POST: step 1 - selecting personality prompt')
     const baseSystemPrompt = getBaseSystemPrompt(Number(personality))
-    console.log('[RAG] POST: baseSystemPrompt length', baseSystemPrompt.length)
+    debugChat('[RAG] POST: baseSystemPrompt length', baseSystemPrompt.length)
 
     // 2. Extract last user message
     const lastUserIndex = [...uiMessages]
@@ -391,25 +502,28 @@ export async function POST(request: NextRequest) {
     const userText = lastUserMessage
       ? getUserMessageText(lastUserMessage)
       : ''
-    console.log('[RAG] POST: step 2 – last user message', {
+    debugChat('[RAG] POST: step 2 - last user message', {
       hasLastUserMessage: !!lastUserMessage,
       userTextLength: userText.length,
       userTextPreview: userText.slice(0, 100) + (userText.length > 100 ? '...' : ''),
     })
 
-    // 3. Retrieve (always — let similarity threshold filter)
-    console.log('[RAG] POST: step 3 – retrieve RAG context')
-    const [{ context: ragContext, chunks: ragChunks }, focusContext] =
-      await Promise.all([retrieveContext(userText, supabase), retrieveFocusContext(userText, supabase)])
-    console.log('[RAG] POST: RAG result', {
+    // 3. Retrieve only the context needed for this turn.
+    const contextPlan = resolveContextPlan(userText, contextMode)
+    debugChat('[RAG] POST: step 3 - context plan', contextPlan)
+    const [{ context: ragContext, chunks: ragChunks }, focusContext] = await Promise.all([
+      contextPlan.rag ? retrieveContext(userText, supabase) : Promise.resolve({ context: '', chunks: [] }),
+      contextPlan.focus ? retrieveFocusContext(userText, supabase, user.id) : Promise.resolve(null),
+    ])
+    debugChat('[RAG] POST: context result', {
       ragContextLength: ragContext.length,
       ragChunksCount: ragChunks.length,
-      ragChunks: ragChunks.map((c, i) => ({ source: i + 1, score: c.score, text: c.text })),
+      hasFocusContext: Boolean(focusContext),
     })
 
     // 4. Build message array
-    const historyUiMessages =
-      lastUserIndex >= 0 ? uiMessages.slice(0, lastUserIndex) : uiMessages
+    const historyUiMessages = (lastUserIndex >= 0 ? uiMessages.slice(0, lastUserIndex) : uiMessages)
+      .slice(-CHAT_HISTORY_MESSAGE_LIMIT)
     const historyMessages = await convertToModelMessages(historyUiMessages as UIMessage[])
     const latestUserMessages = lastUserMessage
       ? await convertToModelMessages([lastUserMessage] as UIMessage[])
@@ -429,30 +543,39 @@ export async function POST(request: NextRequest) {
 
     finalMessages.push(...latestUserMessages)
 
-    console.log('[RAG] POST: step 4 – finalMessages', {
-      totalMessages: finalMessages.length,
-      roles: finalMessages.map((m) => m.role),
+    const sanitizedMessages = sanitizeModelMessages(finalMessages)
+    if (sanitizedMessages.length !== finalMessages.length) {
+      console.warn('[RAG] POST: dropped empty messages before stream', {
+        before: finalMessages.length,
+        after: sanitizedMessages.length,
+      })
+    }
+
+    debugChat('[RAG] POST: step 4 - finalMessages', {
+      totalMessages: sanitizedMessages.length,
+      roles: sanitizedMessages.map((m) => m.role),
     })
 
     // 5. Stream (AI SDK 6: createUIMessageStream + createUIMessageStreamResponse)
-    console.log('[RAG] POST: step 5 – starting stream')
+    debugChat('[RAG] POST: step 5 - starting stream')
     const focusProposal = buildFocusProposal(userText, focusContext)
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
-        console.log('[RAG] POST: execute – writing rag_context to stream', { chunksCount: ragChunks.length })
-        writer.write({
-          type: 'data-rag_context',
-          id: generateId(),
-          data: {
-            chunks: ragChunks.map((c, i) => ({
-              source: i + 1,
-              score: c.score,
-              id: c.id,
-              title: c.title,
-              preview: c.text.length > 1000 ? c.text.substring(0, 500) + '...' : c.text,
-            })),
-          },
-        })
+        if (ragChunks.length) {
+          writer.write({
+            type: 'data-rag_context',
+            id: generateId(),
+            data: {
+              chunks: ragChunks.map((c, i) => ({
+                source: i + 1,
+                score: c.score,
+                id: c.id,
+                title: c.title,
+                preview: c.text.length > 1000 ? c.text.substring(0, 500) + '...' : c.text,
+              })),
+            },
+          })
+        }
 
         if (focusProposal) {
           writer.write({
@@ -462,16 +585,16 @@ export async function POST(request: NextRequest) {
           })
         }
 
-        console.log('[RAG] POST: execute – calling streamText', { provider, model })
+        debugChat('[RAG] POST: execute - calling streamText', { provider, model })
         const result = streamText({
           model: resolveModel(provider, model),
           temperature: resolvedTemperature,
           maxOutputTokens: 2500,
-          messages: finalMessages,
+          messages: sanitizedMessages,
         })
 
         writer.merge(result.toUIMessageStream())
-        console.log('[RAG] POST: execute – merge done')
+        debugChat('[RAG] POST: execute - merge done')
       },
     })
     return createUIMessageStreamResponse({ stream })

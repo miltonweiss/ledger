@@ -1,7 +1,7 @@
 "use client"
 import { History } from "lucide-react"
 import { AddPlus, Trash } from "./icons"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { getChats, deleteChat } from "@/lib/supabase/chats"
 import Link from "next/link"
 
@@ -15,9 +15,10 @@ export function ChatDrawerToggle() {
 
 export default function ChatDrawer ({ children }){
     const [chats, setChats] = useState([])
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(false)
 
     async function fetchChats() {
+        if (loading) return
         setLoading(true)
         const data = await getChats()
         setChats(data)
@@ -32,10 +33,6 @@ export default function ChatDrawer ({ children }){
             setChats(prev => prev.filter(c => c.id !== chatId))
         }
     }
-
-    useEffect(() => {
-        fetchChats()
-    }, [])
 
     return(
         <div className="drawer drawer-end">

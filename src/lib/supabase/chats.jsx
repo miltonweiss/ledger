@@ -3,15 +3,15 @@ import { supabase } from "./client"
 export async function getChats (){
   const { data, error } = await supabase
     .from('chats')
-    .select("*")
+    .select("id, name, personality, created_at")
     .order('created_at', { ascending: false })
+    .limit(50)
 
   if (error) {
     console.error('Error fetching chats:', error);
     return [];
   }
 
-  console.log(data);
   return data || [];
 }
 
@@ -89,4 +89,3 @@ export async function updateChat(id, updates){
 
   return data?.[0] || null;
 }
-

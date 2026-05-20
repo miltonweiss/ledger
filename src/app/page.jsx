@@ -175,16 +175,15 @@ export default function Dashboard() {
 
   const showCloseDay = Boolean(dailyLog.main_block_done || mainTask?.done) || Boolean(dailyLog.cut_task_ids?.length > 0 && !dailyLog.main_block_task_id);
 
-  const supportPresets = useMemo(() => {
-    if (!dailyLog || !state) return [];
-    return getRecommendedSupportPresets({ 
-      dayType: dailyLog.day_type, 
+  const supportPresets = dailyLog && state
+    ? getRecommendedSupportPresets({
+      dayType: dailyLog.day_type,
       weekday: state.weekday,
-      mainTask 
-    });
-  }, [dailyLog, mainTask, state]);
+      mainTask
+    })
+    : [];
 
-  const commitValidation = useMemo(() => {
+  const commitValidation = (() => {
     const mainDoD = mainTask ? validateDefinitionOfDone(mainTask.definition_of_done) : { valid: true };
     const sideDoD = sideTask && !sideTask.isPreset ? validateDefinitionOfDone(sideTask.definition_of_done) : { valid: true };
     
@@ -198,7 +197,7 @@ export default function Dashboard() {
       sideError: !sideDoD.valid ? sideDoD.reason : null,
       capacityError: overCapacity ? `Total planned (${totalPlanned}m) exceeds ${dailyLog.day_type} capacity (${capacityLimitMinutes}m).` : null
     };
-  }, [mainTask, sideTask, dailyLog.day_type]);
+  })();
 
   if (isSunday) {
     return (

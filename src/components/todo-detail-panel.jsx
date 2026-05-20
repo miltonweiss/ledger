@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase/client";
 import { updateTodo, deleteTodo } from "@/lib/supabase/todo";
 import { Checkbox } from "@/components/checkbox";
@@ -11,7 +12,18 @@ import { FOCUS_MODES } from "@/lib/focus-os/constants.js";
 import { getOrCreateDailyLog } from "@/lib/supabase/focus-os";
 import { toLocalDateString } from "@/lib/focus-os/day.js";
 import { X, Trash2, Loader2, Calendar as CalendarIcon, Tag, Timer, Target, Flame } from "lucide-react";
-import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
+
+const SimpleEditor = dynamic(
+  () => import("@/components/tiptap-templates/simple/simple-editor").then((mod) => mod.SimpleEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center min-h-[200px]">
+        <Loader2 className="animate-spin opacity-30" size={20} />
+      </div>
+    ),
+  },
+);
 
 export default function TodoDetailPanel({ todoId, onClose, onUpdated, onDeleted }) {
   const [todo, setTodo] = useState(null);

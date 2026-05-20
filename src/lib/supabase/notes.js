@@ -1,17 +1,35 @@
 import { createSupabaseServer } from "./server";
 
+function extractTextPreview(content, max = 90) {
+  if (!content?.content) return "";
+  const texts = [];
+  const walk = (nodes) => nodes?.forEach((node) => {
+    if (node.type === "text" && node.text) texts.push(node.text);
+    if (node.content) walk(node.content);
+  });
+  walk(content.content);
+  const text = texts.join(" ").trim();
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+}
+
 export async function getNotes() {
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase
     .from("notes")
-    .select("*")
+    .select("id,title,content,created_at,updated_at")
     .order("updated_at", { ascending: false });
 
   if (error) {
     console.error("Error fetching notes:", error);
     throw error;
   }
-  return data || [];
+  return (data || []).map((note) => ({
+    id: note.id,
+    title: note.title,
+    preview: extractTextPreview(note.content),
+    created_at: note.created_at,
+    updated_at: note.updated_at,
+  }));
 }
 
 export async function getNote(id) {

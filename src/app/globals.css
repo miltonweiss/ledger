@@ -1226,6 +1226,10 @@ button:hover{
   margin: 0.7em 0;
 }
 
+.streaming-message-text {
+  white-space: pre-wrap;
+}
+
 /* Inline source refs */
 .source-ref {
   position: relative;

@@ -1,10 +1,22 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Header from "@/components/header";
-import { SimpleEditor } from '@/components/tiptap-templates/simple/simple-editor';
+import dynamic from "next/dynamic";
 import { Plus, Trash2, FileText, Loader2 } from "lucide-react";
 import throttle from "lodash.throttle";
 import { redToast } from "@/components/toasts";
+
+const SimpleEditor = dynamic(
+    () => import("@/components/tiptap-templates/simple/simple-editor").then((mod) => mod.SimpleEditor),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="flex items-center justify-center min-h-[220px]">
+                <Loader2 className="animate-spin opacity-30" />
+            </div>
+        ),
+    },
+);
 
 function extractTextPreview(content, max = 60) {
     if (!content?.content) return "";
@@ -33,6 +45,7 @@ export default function NotesPage() {
     const [activeNoteId, setActiveNoteId] = useState(null);
     const [activeNote, setActiveNote] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isNoteLoading, setIsNoteLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [noteError, setNoteError] = useState("");
 
@@ -64,17 +77,41 @@ export default function NotesPage() {
     useEffect(() => {
         if (!activeNoteId) {
             setActiveNote(null);
+            setIsNoteLoading(false);
             return;
         }
 
-        const note = notes.find(n => n.id === activeNoteId);
-        if (!note) {
-            setActiveNote(null);
-            return;
+        let cancelled = false;
+        async function loadNote() {
+            setIsNoteLoading(true);
+            try {
+                const res = await fetch(`/api/notes/${activeNoteId}`);
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.error || "Failed to fetch note");
+                }
+                const note = await res.json();
+                if (!cancelled) {
+                    setActiveNote(note);
+                    setNoteError("");
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to fetch note:", error);
+                    setActiveNote(null);
+                    setNoteError(error.message);
+                    redToast("Note unavailable", error.message);
+                }
+            } finally {
+                if (!cancelled) setIsNoteLoading(false);
+            }
         }
 
-        setActiveNote(current => current?.id === note.id ? current : note);
-    }, [activeNoteId, notes]);
+        loadNote();
+        return () => {
+            cancelled = true;
+        };
+    }, [activeNoteId]);
 
     // Create new note
     const handleCreateNote = async () => {
@@ -94,7 +131,13 @@ export default function NotesPage() {
             }
 
             const newNote = await res.json();
-            setNotes(prev => [newNote, ...prev]);
+            setNotes(prev => [{
+                id: newNote.id,
+                title: newNote.title,
+                preview: extractTextPreview(newNote.content),
+                created_at: newNote.created_at,
+                updated_at: newNote.updated_at,
+            }, ...prev]);
             setActiveNoteId(newNote.id);
             setNoteError("");
         } catch (error) {
@@ -141,7 +184,12 @@ export default function NotesPage() {
                 }
                 // Update local notes list to keep titles in sync
                 const savedNote = await res.json();
-                setNotes(prev => prev.map(n => n.id === id ? savedNote : n));
+                setNotes(prev => prev.map(n => n.id === id ? {
+                    ...n,
+                    title: savedNote.title,
+                    preview: extractTextPreview(savedNote.content),
+                    updated_at: savedNote.updated_at,
+                } : n));
                 setActiveNote(prev => prev?.id === id ? { ...prev, ...savedNote } : prev);
                 setNoteError("");
             } catch (error) {
@@ -222,7 +270,7 @@ export default function NotesPage() {
                                             </span>
                                         </div>
                                         <div className={`text-xs note-item-preview pr-6 ${activeNoteId === note.id ? "opacity-80" : "opacity-50"}`}>
-                                            {extractTextPreview(note.content) || "No additional text"}
+                                            {note.preview || extractTextPreview(note.content) || "No additional text"}
                                         </div>
                                         <button 
                                             onClick={(e) => handleDeleteNote(note.id, e)} 
@@ -239,7 +287,11 @@ export default function NotesPage() {
 
                 {/* Editor Area */}
                 <div className="flex-1 flex flex-col min-w-0 bg-[var(--surface-base)]">
-                    {activeNote ? (
+                    {isNoteLoading ? (
+                        <div className="flex-1 flex items-center justify-center">
+                            <Loader2 className="animate-spin opacity-30" />
+                        </div>
+                    ) : activeNote ? (
                         <div key={activeNoteId} className="flex-1 flex flex-col min-h-0 notes-editor-fade">
                             <div className="px-10 pt-8 pb-4 flex items-start justify-between gap-4 w-full max-w-3xl mx-auto border-b border-transparent">
                                 <input

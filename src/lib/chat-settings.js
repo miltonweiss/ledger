@@ -3,11 +3,19 @@ export const CHAT_SETTINGS_KEY = 'ledger-chat-settings'
 export const PROVIDERS = {
   openai: {
     label: 'OpenAI',
-    models: ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini'],
+    models: ['gpt-5.5', 'gpt-5.4-pro', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano'],
   },
   mistral: {
     label: 'Mistral',
-    models: ['mistral-large-latest', 'mistral-small-latest'],
+    models: [
+      'mistral-large-latest',
+      'mistral-medium-latest',
+      'ministral-3b-latest',
+      'ministral-8b-latest',
+      'open-mistral-7b',
+      'open-mixtral-8x7b',
+      'open-mixtral-8x22b',
+    ],
   },
   deepseek: {
     label: 'DeepSeek',
@@ -15,10 +23,19 @@ export const PROVIDERS = {
   },
 }
 
+export const CONTEXT_MODES = {
+  auto: 'Auto',
+  fast: 'Fast',
+  sources: 'Sources',
+  focus: 'Focus OS',
+  full: 'Full',
+}
+
 export const DEFAULT_SETTINGS = {
   provider: 'openai',
-  model: 'gpt-4.1',
+  model: 'gpt-5.5',
   temperature: 0.35,
+  contextMode: 'auto',
 }
 
 export function loadChatSettings() {
@@ -36,8 +53,11 @@ export function loadChatSettings() {
       typeof parsed.temperature === 'number' && parsed.temperature >= 0 && parsed.temperature <= 2
         ? parsed.temperature
         : DEFAULT_SETTINGS.temperature
+    const contextMode = CONTEXT_MODES[parsed.contextMode]
+      ? parsed.contextMode
+      : DEFAULT_SETTINGS.contextMode
 
-    return { provider, model, temperature }
+    return { provider, model, temperature, contextMode }
   } catch {
     return { ...DEFAULT_SETTINGS }
   }

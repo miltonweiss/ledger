@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
+  CONTEXT_MODES,
   DEFAULT_SETTINGS,
   PROVIDERS,
   loadChatSettings,
@@ -78,7 +79,7 @@ export default function ChatSettingsPanel({ settings, onChange }) {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-2 z-50 foreforeground borderDefault rounded-xl p-3 shadow-lg flex flex-col gap-3 min-w-[220px]"
+          className="absolute right-0 top-full mt-2 z-50 foreground borderDefault rounded-xl p-3 shadow-lg flex flex-col gap-3 min-w-[220px]"
         >
           <label className="flex flex-col gap-1 text-sm">
             <span className="opacity-60">Provider</span>
@@ -113,6 +114,22 @@ export default function ChatSettingsPanel({ settings, onChange }) {
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
+            <span className="opacity-60">Context</span>
+            <select
+              value={settings.contextMode}
+              onChange={(e) => update({ contextMode: e.target.value })}
+              className="focus-input py-1 text-sm w-full cursor-pointer appearance-none bg-no-repeat"
+              style={selectStyle}
+            >
+              {Object.entries(CONTEXT_MODES).map(([id, label]) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
             <span className="opacity-60 flex justify-between">
               <span>Temperature</span>
               <span>{settings.temperature.toFixed(2)}</span>
@@ -134,11 +151,7 @@ export default function ChatSettingsPanel({ settings, onChange }) {
 }
 
 export function useChatSettings() {
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
-
-  useEffect(() => {
-    setSettings(loadChatSettings())
-  }, [])
+  const [settings, setSettings] = useState(() => loadChatSettings())
 
   return [settings, setSettings]
 }

@@ -130,6 +130,26 @@ function SourceChip({ num, chunk }) {
   );
 }
 
+function StreamingAssistantMessage({ content, chunks }) {
+  return (
+    <div className="markdown-content rag-markdown">
+      <div className="streaming-message-text">{content}</div>
+      {chunks.length > 0 && (
+        <div className="source-footer">
+          <span className="source-footer-label">Sources:</span>
+          {chunks.map((c, i) => (
+            <SourceChip
+              key={c.source ?? i}
+              num={c.source ?? i + 1}
+              chunk={c}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AssistantMessage({ content, chunks }) {
   const sourceMap = useMemo(() => {
     const map = new Map();
@@ -271,6 +291,7 @@ export default function ChatMessageList({
         }
 
         const isWelcome = !isUser && (message.id === "init" || index === 0);
+        const isStreamingAssistant = !isUser && index === visible.length - 1 && isLoading;
 
         return (
           <div
@@ -283,7 +304,11 @@ export default function ChatMessageList({
               <div
                 className={`message-bubble-assistant${isWelcome ? " message-bubble-assistant-welcome" : ""}`}
               >
-                <AssistantMessage content={text} chunks={chunks} />
+                {isStreamingAssistant ? (
+                  <StreamingAssistantMessage content={text} chunks={chunks} />
+                ) : (
+                  <AssistantMessage content={text} chunks={chunks} />
+                )}
                 {proposals.map((proposal, proposalIndex) => (
                   <FocusProposalCard key={`${proposal.kind || "proposal"}-${proposalIndex}`} proposal={proposal} />
                 ))}
