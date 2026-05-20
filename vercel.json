@@ -1,0 +1,12 @@
+{
+    "experimentalServices": {
+        "frontend": {
+            "routePrefix": "/",
+            "framework": "nextjs"
+        },
+        "indexer": {
+            "entrypoint": "services/indexer",
+            "routePrefix": "/_/indexer"
+        }
+    }
+}
