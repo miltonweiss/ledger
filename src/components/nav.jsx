@@ -8,6 +8,7 @@ import { DAY_TYPES, CAPACITY_BUDGET } from "@/lib/focus-os/constants.js";
 import { getTodayFocusState, updateDailyLog } from "@/lib/supabase/focus-os";
 import { validateDefinitionOfDone } from "@/lib/focus-os/validation.js";
 import { buildSupportPresetTask, getSupportPresetById } from "@/lib/focus-os/support-block-presets.js";
+import { getMainBlockTaskId, getSideBlockTaskId, splitTaskIdsByStorage, taskSelectionUpdates } from "@/lib/focus-os/task-refs.js";
 const FOCUS_SYNC_EVENT = "focus-os-daily-log-updated";
 
 const iconMap = {
@@ -81,10 +82,12 @@ export default function NavBar() {
   const dailyLog = focusState?.dailyLog;
   const mode = dailyLog?.mode || "plan";
   const activeTasks = (focusState?.tasks || []).filter((task) => !task.done && !task.killed_at);
-  const selectedMainTask = activeTasks.find((task) => task.id === dailyLog?.main_block_task_id) || null;
-  const selectedSupportTask = activeTasks.find((task) => task.id === dailyLog?.side_block_task_id) || null;
+  const mainTaskId = getMainBlockTaskId(dailyLog);
+  const sideTaskId = getSideBlockTaskId(dailyLog);
+  const selectedMainTask = activeTasks.find((task) => task.id === mainTaskId) || null;
+  const selectedSupportTask = activeTasks.find((task) => task.id === sideTaskId) || null;
   const selectedSupportPresetTask = buildSupportPresetTask(getSupportPresetById(dailyLog?.support_preset_id));
-  const recommendedMainTask = dailyLog?.skip_main_block || focusState?.recommendation?.mainBlock?.id === dailyLog?.side_block_task_id
+  const recommendedMainTask = dailyLog?.skip_main_block || focusState?.recommendation?.mainBlock?.id === sideTaskId
     ? null
     : focusState?.recommendation?.mainBlock || null;
   const mainTask = dailyLog?.skip_main_block ? null : selectedMainTask || recommendedMainTask;
@@ -115,13 +118,17 @@ export default function NavBar() {
     setFocusSaving(true);
 
     try {
+      const committedMainId = mainTaskId || mainTask?.id || null;
+      const committedSideId = sideTask?.isPreset ? null : sideTaskId || sideTask?.id || null;
+      const { supabaseIds: cutTaskIds, externalIds: cutTaskExternalIds } = splitTaskIdsByStorage(cutTasks.map((task) => task.id));
       const updates = focusActionIsCommit
         ? {
             mode: "execute",
-            main_block_task_id: dailyLog.main_block_task_id || mainTask?.id || null,
-            side_block_task_id: sideTask?.isPreset ? null : dailyLog.side_block_task_id || sideTask?.id || null,
+            ...taskSelectionUpdates("main", committedMainId),
+            ...taskSelectionUpdates("side", committedSideId),
             support_preset_id: sideTask?.isPreset ? sideTask.preset_id : dailyLog.support_preset_id || null,
-            cut_task_ids: cutTasks.map((task) => task.id),
+            cut_task_ids: cutTaskIds,
+            cut_task_external_ids: cutTaskExternalIds,
           }
         : { mode: "plan" };
 

@@ -1,7 +1,39 @@
 import { supabase } from "./client"
 
+export function isNotionTodoId(id) {
+  return typeof id === "string" && id.startsWith("notion:");
+}
+
 export async function getTodo (){
-    let { data, error } = await supabase
+  const [supabaseTodos, notionTodos] = await Promise.all([
+    getSupabaseTodos(),
+    getNotionTodos(),
+  ]);
+
+  return mergeTodos(supabaseTodos, notionTodos);
+}
+
+export async function getTodoById(id) {
+  if (isNotionTodoId(id)) {
+    return getNotionTodoById(id);
+  }
+
+  let { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error("Error fetching todo:", error);
+    return null;
+  }
+
+  return normalizeSupabaseTodo(data);
+}
+
+async function getSupabaseTodos() {
+  let { data, error } = await supabase
       .from('tasks')
       .select("*")
       .is('killed_at', null)
@@ -19,7 +51,7 @@ export async function getTodo (){
     return [];
   }
   
-  return data || [];
+  return (data || []).map(normalizeSupabaseTodo);
 }
 
 export async function createTodo(todo){
@@ -56,8 +88,12 @@ export async function createTodo(todo){
         }])
         .select()
 
-      if (!retry.error) return retry.data?.[0] || null;
-      error = retry.error;
+      if (!retry.error) {
+        data = retry.data;
+        error = null;
+      } else {
+        error = retry.error;
+      }
     }
 
     if (error) {
@@ -70,7 +106,15 @@ export async function createTodo(todo){
       return null;
     }
 
-    return data?.[0] || null;
+    const createdTodo = data?.[0] || null;
+    const notionTodo = await createNotionTodo(todo);
+
+    if (createdTodo && notionTodo?.notion_page_id) {
+      const linkedTodo = await linkSupabaseTodoToNotion(createdTodo.id, notionTodo.notion_page_id);
+      return normalizeSupabaseTodo(linkedTodo || { ...createdTodo, notion_page_id: notionTodo.notion_page_id });
+    }
+
+    return normalizeSupabaseTodo(createdTodo) || notionTodo;
   } catch (err) {
     console.error('Exception creating todo:', err);
     return null;
@@ -84,11 +128,17 @@ function isMissingFocusTaskColumns(error) {
     message.includes("killed_at") ||
     message.includes("completed_at") ||
     message.includes("area") ||
-    message.includes("work_type")
+    message.includes("work_type") ||
+    message.includes("notion_page_id")
   );
 }
 
 export async function deleteTodo(id){
+  if (isNotionTodoId(id)) {
+    return deleteNotionTodo(id);
+  }
+
+  const existing = await getTodoById(id);
   const { error } = await supabase
     .from('tasks')
     .delete()
@@ -99,11 +149,19 @@ export async function deleteTodo(id){
     return false;
   }
 
+  if (existing?.notion_page_id) {
+    await deleteNotionTodo(`notion:${existing.notion_page_id}`);
+  }
+
   return true;
 }
 
 
 export async function updateTodo(id, updates){
+  if (isNotionTodoId(id)) {
+    return updateNotionTodo(id, updates);
+  }
+
   const payload = { ...updates };
   if (Object.prototype.hasOwnProperty.call(payload, "done")) {
     payload.completed_at = payload.done ? new Date().toISOString() : null;
@@ -129,5 +187,133 @@ export async function updateTodo(id, updates){
     return null;
   }
 
+  const updatedTodo = normalizeSupabaseTodo(data?.[0] || null);
+
+  if (updatedTodo?.notion_page_id) {
+    await updateNotionTodo(`notion:${updatedTodo.notion_page_id}`, updates);
+  }
+
+  return updatedTodo;
+}
+
+async function linkSupabaseTodoToNotion(id, notionPageId) {
+  let { data, error } = await supabase
+    .from('tasks')
+    .update({ notion_page_id: notionPageId })
+    .eq('id', id)
+    .select()
+
+  if (isMissingFocusTaskColumns(error)) {
+    return null;
+  }
+
+  if (error) {
+    console.error('Error linking todo to Notion:', error);
+    return null;
+  }
+
   return data?.[0] || null;
+}
+
+function normalizeSupabaseTodo(todo) {
+  return todo ? { ...todo, source: "supabase" } : null;
+}
+
+function mergeTodos(supabaseTodos, notionTodos) {
+  const linkedNotionIds = new Set(
+    supabaseTodos
+      .map((todo) => normalizeNotionPageId(todo.notion_page_id))
+      .filter(Boolean),
+  );
+  const supabaseSignatures = new Set(supabaseTodos.map(todoSignature));
+
+  const externalNotionTodos = notionTodos.filter((todo) => {
+    if (linkedNotionIds.has(normalizeNotionPageId(todo.notion_page_id))) return false;
+    return !supabaseSignatures.has(todoSignature(todo));
+  });
+
+  return [...supabaseTodos, ...externalNotionTodos];
+}
+
+function todoSignature(todo) {
+  return [
+    String(todo?.name || "").trim().toLowerCase(),
+    todo?.due || "",
+    todo?.priority || "",
+  ].join("|");
+}
+
+function normalizeNotionPageId(id) {
+  return String(id || "").replace(/^notion:/, "").replace(/-/g, "");
+}
+
+async function getNotionTodos() {
+  try {
+    const response = await fetch("/api/notion/tasks");
+    if (!response.ok) throw new Error(await response.text());
+    const payload = await response.json();
+    return Array.isArray(payload.data) ? payload.data : [];
+  } catch (error) {
+    console.error("Error fetching Notion todos:", error);
+    return [];
+  }
+}
+
+async function getNotionTodoById(id) {
+  try {
+    const response = await fetch(`/api/notion/tasks?id=${encodeURIComponent(id)}`);
+    if (!response.ok) throw new Error(await response.text());
+    const payload = await response.json();
+    return payload.data || null;
+  } catch (error) {
+    console.error("Error fetching Notion todo:", error);
+    return null;
+  }
+}
+
+async function createNotionTodo(todo) {
+  try {
+    const response = await fetch("/api/notion/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(todo),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const payload = await response.json();
+    return payload.data || null;
+  } catch (error) {
+    console.error("Error creating Notion todo:", error);
+    return null;
+  }
+}
+
+async function updateNotionTodo(id, updates) {
+  try {
+    const response = await fetch("/api/notion/tasks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, updates }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const payload = await response.json();
+    return payload.data || null;
+  } catch (error) {
+    console.error("Error updating Notion todo:", error);
+    return null;
+  }
+}
+
+async function deleteNotionTodo(id) {
+  try {
+    const response = await fetch("/api/notion/tasks", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return true;
+  } catch (error) {
+    console.error("Error deleting Notion todo:", error);
+    return false;
+  }
 }

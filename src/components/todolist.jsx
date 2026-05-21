@@ -121,7 +121,7 @@ export default function ToDoList ({ selectedTodoId, onSelectTodo }){
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-2.5 py-1 text-[0.54rem] font-bold uppercase tracking-[0.08em] rounded-md transition-all border ${
+                  className={`px-2.5 py-1 !text-[0.7rem] font-bold uppercase tracking-[0.08em] rounded-md transition-all border ${
                     filter === f 
                       ? "bg-[var(--surface-raised)] text-[var(--text-primary)] border-[var(--border-default)] shadow-sm" 
                       : "opacity-40 hover:opacity-100 border-transparent"
@@ -217,7 +217,7 @@ export default function ToDoList ({ selectedTodoId, onSelectTodo }){
                                 setEditingName(todo.name);
                               }
                             }}
-                            className={`text-[0.82rem] leading-snug font-medium truncate ${!isClosed ? 'cursor-pointer hover:text-accent' : ''} transition-colors ${todo.done ? "line-through opacity-40" : ""}`}
+                            className={`text-[0.82rem] leading-snug font-medium truncate ${!isClosed ? 'cursor-pointer hover:opacity-80 ' : ''} transition-colors ${todo.done ? "line-through opacity-40" : ""}`}
                           >
                             {todo.name}
                           </div>

@@ -14,6 +14,7 @@ import { getTodayFocusState, updateDailyLog } from "@/lib/supabase/focus-os";
 import { buildSupportPresetTask, getRecommendedSupportPresets, getSupportPresetById } from "@/lib/focus-os/support-block-presets.js";
 import { buildTodayRecommendation } from "@/lib/focus-os/recommendation.js";
 import { validateDefinitionOfDone } from "@/lib/focus-os/validation.js";
+import { getCutTaskIds, getMainBlockTaskId, getSideBlockTaskId, taskSelectionUpdates } from "@/lib/focus-os/task-refs.js";
 import ClarifyTaskModal from "@/components/focus-os/ClarifyTaskModal";
 import { useEffect, useMemo, useState } from "react";
 
@@ -103,11 +104,13 @@ export default function Dashboard() {
   }
 
   const { dailyLog, weeklyScore, recommendation } = state;
-  const selectedMainTask = activeTasks.find((task) => task.id === dailyLog.main_block_task_id) || null;
-  const selectedSupportTask = activeTasks.find((task) => task.id === dailyLog.side_block_task_id) || null;
+  const mainTaskId = getMainBlockTaskId(dailyLog);
+  const sideTaskId = getSideBlockTaskId(dailyLog);
+  const selectedMainTask = activeTasks.find((task) => task.id === mainTaskId) || null;
+  const selectedSupportTask = activeTasks.find((task) => task.id === sideTaskId) || null;
   const selectedSupportPreset = getSupportPresetById(dailyLog.support_preset_id);
   const selectedSupportPresetTask = buildSupportPresetTask(selectedSupportPreset);
-  const recommendedMainTask = dailyLog.skip_main_block || recommendation?.mainBlock?.id === dailyLog.side_block_task_id
+  const recommendedMainTask = dailyLog.skip_main_block || recommendation?.mainBlock?.id === sideTaskId
     ? null
     : recommendation?.mainBlock || null;
   const mainTask = dailyLog.skip_main_block ? null : selectedMainTask || recommendedMainTask;
@@ -140,9 +143,9 @@ export default function Dashboard() {
       ...state,
       dailyLog: updatedDailyLog,
       recommendation: nextRecommendation,
-      mainTask: (state.tasks || []).find((task) => task.id === updatedDailyLog.main_block_task_id) || null,
-      sideTask: (state.tasks || []).find((task) => task.id === updatedDailyLog.side_block_task_id) || null,
-      cutTasks: (state.tasks || []).filter((task) => updatedDailyLog.cut_task_ids?.includes(task.id)),
+      mainTask: (state.tasks || []).find((task) => task.id === getMainBlockTaskId(updatedDailyLog)) || null,
+      sideTask: (state.tasks || []).find((task) => task.id === getSideBlockTaskId(updatedDailyLog)) || null,
+      cutTasks: (state.tasks || []).filter((task) => getCutTaskIds(updatedDailyLog).includes(task.id)),
     };
 
     setState(nextState);
@@ -157,23 +160,27 @@ export default function Dashboard() {
   }
 
   async function handlePresetClick(preset) {
-    await handleDailyLogUpdate({ support_preset_id: preset.id, side_block_task_id: null, side_block_done: false });
+    await handleDailyLogUpdate({
+      support_preset_id: preset.id,
+      ...taskSelectionUpdates("side", null),
+      side_block_done: false,
+    });
   }
 
   async function handleMainSelect(id) {
     if (id === "nothing") {
-      await handleDailyLogUpdate({ main_block_task_id: null, skip_main_block: true });
+      await handleDailyLogUpdate({ ...taskSelectionUpdates("main", null), skip_main_block: true });
       return;
     }
 
     await handleDailyLogUpdate({
-      main_block_task_id: id || null,
+      ...taskSelectionUpdates("main", id || null),
       skip_main_block: false,
-      side_block_task_id: id && id === dailyLog.side_block_task_id ? null : dailyLog.side_block_task_id,
+      ...(id && id === sideTaskId ? taskSelectionUpdates("side", null) : {}),
     });
   }
 
-  const showCloseDay = Boolean(dailyLog.main_block_done || mainTask?.done) || Boolean(dailyLog.cut_task_ids?.length > 0 && !dailyLog.main_block_task_id);
+  const showCloseDay = Boolean(dailyLog.main_block_done || mainTask?.done) || Boolean(getCutTaskIds(dailyLog).length > 0 && !mainTaskId);
 
   const supportPresets = dailyLog && state
     ? getRecommendedSupportPresets({
@@ -234,16 +241,16 @@ export default function Dashboard() {
             <MainBlockCard
               task={mainTask}
               tasks={activeTasks}
-              selectedId={dailyLog.skip_main_block ? "nothing" : dailyLog.main_block_task_id || ""}
+              selectedId={dailyLog.skip_main_block ? "nothing" : mainTaskId || ""}
               onSelect={handleMainSelect}
               onStart={() => setTimerConfig({ task: mainTask, mode: FOCUS_MODES.MAIN })}
             />
             <SupportBlockCard
               task={sideTask}
               tasks={activeTasks}
-              selectedId={dailyLog.side_block_task_id || ""}
+              selectedId={sideTaskId || ""}
               selectedPresetId={dailyLog.support_preset_id || ""}
-              onSelect={(id) => handleDailyLogUpdate({ side_block_task_id: id || null, support_preset_id: null, side_block_done: false })}
+              onSelect={(id) => handleDailyLogUpdate({ ...taskSelectionUpdates("side", id || null), support_preset_id: null, side_block_done: false })}
               onStart={() => setTimerConfig({ task: sideTask, mode: FOCUS_MODES.SIDE })}
               presets={supportPresets}
               onPresetClick={handlePresetClick}
@@ -298,7 +305,7 @@ export default function Dashboard() {
           <MainBlockCard
             task={mainTask}
             tasks={activeTasks}
-            selectedId={dailyLog.skip_main_block ? "nothing" : dailyLog.main_block_task_id || ""}
+            selectedId={dailyLog.skip_main_block ? "nothing" : mainTaskId || ""}
             onSelect={handleMainSelect}
             onStart={() => setTimerConfig({ task: mainTask, mode: FOCUS_MODES.MAIN })}
           />
@@ -306,9 +313,9 @@ export default function Dashboard() {
             <SupportBlockCard
               task={sideTask}
               tasks={activeTasks}
-              selectedId={dailyLog.side_block_task_id || ""}
+              selectedId={sideTaskId || ""}
               selectedPresetId={dailyLog.support_preset_id || ""}
-              onSelect={(id) => handleDailyLogUpdate({ side_block_task_id: id || null, support_preset_id: null, side_block_done: false })}
+              onSelect={(id) => handleDailyLogUpdate({ ...taskSelectionUpdates("side", id || null), support_preset_id: null, side_block_done: false })}
               onStart={() => setTimerConfig({ task: sideTask, mode: FOCUS_MODES.SIDE })}
               presets={supportPresets}
               onPresetClick={handlePresetClick}

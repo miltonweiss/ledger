@@ -1,6 +1,6 @@
 "use client";
 import Header from "@/components/header";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ToDoList from "@/components/todolist";
 import TodoDetailPanel from "@/components/todo-detail-panel";
 
@@ -18,7 +18,11 @@ const TODO_HEADLINES = [
 ];
 
 export default function TodoPage() {
-  const [randint] = useState(() => Math.floor(Math.random() * TODO_HEADLINES.length));
+  const [randint, setRandint] = useState(0);
+
+  useEffect(() => {
+    setRandint(Math.floor(Math.random() * TODO_HEADLINES.length));
+  }, []);
   const [selectedTodoId, setSelectedTodoId] = useState(null);
 
   return (

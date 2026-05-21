@@ -1,8 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { supabase } from "@/lib/supabase/client";
-import { updateTodo, deleteTodo } from "@/lib/supabase/todo";
+import { updateTodo, deleteTodo, getTodoById } from "@/lib/supabase/todo";
 import { Checkbox } from "@/components/checkbox";
 import { DatePicker } from "@/components/datePicker";
 import Select from "@/components/select";
@@ -11,6 +10,7 @@ import { AreaSelect, BlockTypeSelect, EnergySelect, WorkTypeSelect } from "@/com
 import { FOCUS_MODES } from "@/lib/focus-os/constants.js";
 import { getOrCreateDailyLog } from "@/lib/supabase/focus-os";
 import { toLocalDateString } from "@/lib/focus-os/day.js";
+import { redToast } from "@/components/toasts";
 import { X, Trash2, Loader2, Calendar as CalendarIcon, Tag, Timer, Target, Flame } from "lucide-react";
 
 const SimpleEditor = dynamic(
@@ -36,15 +36,8 @@ export default function TodoDetailPanel({ todoId, onClose, onUpdated, onDeleted 
     async function fetchTodo() {
       if (!todoId) return;
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('id', todoId)
-        .single();
-      
-      if (error) {
-        console.error("Error fetching todo:", error);
-      } else {
+      const data = await getTodoById(todoId);
+      if (data) {
         setTodo(data);
       }
       const log = await getOrCreateDailyLog(toLocalDateString());
@@ -71,12 +64,8 @@ export default function TodoDetailPanel({ todoId, onClose, onUpdated, onDeleted 
   };
 
   const refreshTodo = async () => {
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('id', todoId)
-      .single();
-    if (!error) {
+    const data = await getTodoById(todoId);
+    if (data) {
       setTodo(data);
       if (onUpdated) onUpdated(data);
     }
@@ -223,7 +212,7 @@ export default function TodoDetailPanel({ todoId, onClose, onUpdated, onDeleted 
 
         <div className="pt-8 mt-auto border-t borderDefault flex justify-between items-center">
           <div className="text-[9px] opacity-30 uppercase">
-            ID: {todo.id.split('-')[0]}...
+            ID: {todo.id.replace(/^notion:/, "").split('-')[0]}...
           </div>
           <div className="flex items-center gap-2">
             {!isClosed && (

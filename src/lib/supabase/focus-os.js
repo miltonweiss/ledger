@@ -4,7 +4,8 @@ import { calculateCapacityMode, canStopToday, getDefaultDayType, getWeekdayName,
 import { buildTodayRecommendation } from "@/lib/focus-os/recommendation.js";
 import { calculateWeeklyScore, getWeekRange } from "@/lib/focus-os/score.js";
 import { buildSupportPresetTask, getSupportPresetById } from "@/lib/focus-os/support-block-presets.js";
-import { createTodo } from "./todo";
+import { getCutTaskIds, getMainBlockTaskId, getSideBlockTaskId, splitTaskIdsByStorage, taskSelectionUpdates } from "@/lib/focus-os/task-refs.js";
+import { createTodo, getTodo, updateTodo } from "./todo";
 
 const pendingDailyLogs = new Map();
 
@@ -231,7 +232,9 @@ export async function getTodayFocusState({ date = toLocalDateString(), tasks = n
   const [tasksResult, focusSessions, shutdown, weekData, recentLogs] = await Promise.all([
     tasks
       ? Promise.resolve({ data: tasks, error: null })
-      : supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+      : getTodo()
+          .then((data) => ({ data, error: null }))
+          .catch((error) => ({ data: [], error })),
     getFocusSessionsForLog(dailyLog.id),
     getLatestShutdown(dailyLog.id),
     getWeekFocusData(`${date}T12:00:00`),
@@ -241,8 +244,8 @@ export async function getTodayFocusState({ date = toLocalDateString(), tasks = n
   if (tasksResult.error) console.error("Error fetching tasks:", tasksResult.error);
 
   const allTasks = tasksResult.data || [];
-  const mainTask = allTasks.find((task) => task.id === dailyLog.main_block_task_id) || null;
-  const selectedSideTask = allTasks.find((task) => task.id === dailyLog.side_block_task_id) || null;
+  const mainTask = allTasks.find((task) => task.id === getMainBlockTaskId(dailyLog)) || null;
+  const selectedSideTask = allTasks.find((task) => task.id === getSideBlockTaskId(dailyLog)) || null;
   const selectedSupportPresetTask = buildSupportPresetTask(getSupportPresetById(dailyLog.support_preset_id));
   const sideTask = selectedSideTask || selectedSupportPresetTask || null;
   const capacityMode = calculateCapacityMode({
@@ -285,7 +288,7 @@ export async function getTodayFocusState({ date = toLocalDateString(), tasks = n
     tasks: allTasks,
     mainTask,
     sideTask,
-    cutTasks: allTasks.filter((task) => dailyLog.cut_task_ids?.includes(task.id)),
+    cutTasks: allTasks.filter((task) => getCutTaskIds(dailyLog).includes(task.id)),
     recommendation,
     weeklyScore,
     shutdown,
@@ -297,11 +300,12 @@ export async function getTodayFocusState({ date = toLocalDateString(), tasks = n
 
 export async function startFocusSession({ task, dailyLogId, mode, plannedMinutes, goalItems = [] }) {
   const { data: { user } } = await supabase.auth.getUser();
+  const hasSupabaseTask = task?.id && !task.isPreset && task.source !== "notion" && !String(task.id).startsWith("notion:");
   const { data, error } = await supabase
     .from("focus_sessions")
     .insert([
       {
-        task_id: task?.isPreset ? null : task?.id || null,
+        task_id: hasSupabaseTask ? task.id : null,
         daily_log_id: dailyLogId,
         mode,
         planned_minutes: plannedMinutes,
@@ -349,13 +353,13 @@ export async function finishFocusSession({ sessionId, task, dailyLog, actualMinu
       taskUpdates.completed_at = endedAt;
     }
 
-    await supabase.from("tasks").update(taskUpdates).eq("id", task.id);
+    await updateTodo(task.id, taskUpdates);
 
-    if (dailyLog?.main_block_task_id === task.id) {
+    if (task.source !== "notion" && dailyLog?.main_block_task_id === task.id) {
       await updateDailyLog(dailyLog.id, { main_block_done: true });
     }
 
-    if (dailyLog?.side_block_task_id === task.id) {
+    if (task.source !== "notion" && dailyLog?.side_block_task_id === task.id) {
       await updateDailyLog(dailyLog.id, { side_block_done: true });
     }
   }
@@ -444,9 +448,13 @@ export async function applyFocusProposal(proposal, { confirmKill = false } = {})
     : await getOrCreateDailyLog(proposal.date);
 
   const logUpdates = {};
-  if ("main_block_task_id" in proposal) logUpdates.main_block_task_id = proposal.main_block_task_id;
-  if ("side_block_task_id" in proposal) logUpdates.side_block_task_id = proposal.side_block_task_id;
-  if (Array.isArray(proposal.cut_task_ids)) logUpdates.cut_task_ids = proposal.cut_task_ids;
+  if ("main_block_task_id" in proposal) Object.assign(logUpdates, taskSelectionUpdates("main", proposal.main_block_task_id));
+  if ("side_block_task_id" in proposal) Object.assign(logUpdates, taskSelectionUpdates("side", proposal.side_block_task_id));
+  if (Array.isArray(proposal.cut_task_ids)) {
+    const { supabaseIds, externalIds } = splitTaskIdsByStorage(proposal.cut_task_ids);
+    logUpdates.cut_task_ids = supabaseIds;
+    logUpdates.cut_task_external_ids = externalIds;
+  }
 
   if (Object.keys(logUpdates).length) {
     await updateDailyLog(dailyLog.id, logUpdates);
@@ -456,15 +464,16 @@ export async function applyFocusProposal(proposal, { confirmKill = false } = {})
     await Promise.all(
       proposal.move_tasks
         .filter((move) => move?.id)
-        .map((move) => supabase.from("tasks").update({ due: move.due || null }).eq("id", move.id)),
+        .map((move) => updateTodo(move.id, { due: move.due || null })),
     );
   }
 
   if (confirmKill && Array.isArray(proposal.kill_task_ids) && proposal.kill_task_ids.length) {
-    await supabase
-      .from("tasks")
-      .update({ killed_at: new Date().toISOString() })
-      .in("id", proposal.kill_task_ids);
+    await Promise.all(
+      proposal.kill_task_ids
+        .filter(Boolean)
+        .map((id) => updateTodo(id, { killed_at: new Date().toISOString() })),
+    );
   }
 
   return { ok: true };

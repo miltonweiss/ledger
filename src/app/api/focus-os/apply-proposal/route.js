@@ -1,6 +1,8 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { getDefaultDayType, calculateCapacityMode } from "@/lib/focus-os/day.js";
 import { recoverDailyLogAfterConflict } from "@/lib/supabase/daily-log-recovery";
+import { archiveNotionTask, updateNotionTask } from "@/lib/notion/tasks";
+import { isExternalTaskId, splitTaskIdsByStorage, taskSelectionUpdates } from "@/lib/focus-os/task-refs.js";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +26,13 @@ export async function POST(request) {
     }
 
     const logUpdates = {};
-    if ("main_block_task_id" in proposal) logUpdates.main_block_task_id = proposal.main_block_task_id;
-    if ("side_block_task_id" in proposal) logUpdates.side_block_task_id = proposal.side_block_task_id;
-    if (Array.isArray(proposal.cut_task_ids)) logUpdates.cut_task_ids = proposal.cut_task_ids;
+    if ("main_block_task_id" in proposal) Object.assign(logUpdates, taskSelectionUpdates("main", proposal.main_block_task_id));
+    if ("side_block_task_id" in proposal) Object.assign(logUpdates, taskSelectionUpdates("side", proposal.side_block_task_id));
+    if (Array.isArray(proposal.cut_task_ids)) {
+      const { supabaseIds, externalIds } = splitTaskIdsByStorage(proposal.cut_task_ids);
+      logUpdates.cut_task_ids = supabaseIds;
+      logUpdates.cut_task_external_ids = externalIds;
+    }
 
     if (Object.keys(logUpdates).length) {
       const { error } = await supabase
@@ -39,17 +45,27 @@ export async function POST(request) {
     if (Array.isArray(proposal.move_tasks)) {
       for (const move of proposal.move_tasks) {
         if (!move?.id) continue;
+        if (isExternalTaskId(move.id)) {
+          await updateNotionTask(move.id, { due: move.due || null });
+          continue;
+        }
+
         const { error } = await supabase.from("tasks").update({ due: move.due || null }).eq("id", move.id);
         if (error) throw error;
       }
     }
 
     if (confirmKill && Array.isArray(proposal.kill_task_ids) && proposal.kill_task_ids.length) {
-      const { error } = await supabase
-        .from("tasks")
-        .update({ killed_at: new Date().toISOString() })
-        .in("id", proposal.kill_task_ids);
-      if (error) throw error;
+      const { supabaseIds, externalIds } = splitTaskIdsByStorage(proposal.kill_task_ids);
+      if (supabaseIds.length) {
+        const { error } = await supabase
+          .from("tasks")
+          .update({ killed_at: new Date().toISOString() })
+          .in("id", supabaseIds);
+        if (error) throw error;
+      }
+
+      await Promise.all(externalIds.map((id) => archiveNotionTask(id)));
     }
 
     return Response.json({ ok: true });
